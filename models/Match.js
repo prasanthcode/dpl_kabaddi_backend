@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const matchSchema = new mongoose.Schema({
-  matchNumber: { type: Number, required: true, unique: true }, // Unique match number
+  matchNumber: { type: Number, required: true, unique: true },
   teamA: { type: mongoose.Schema.Types.ObjectId, ref: "Team", required: true },
   teamB: { type: mongoose.Schema.Types.ObjectId, ref: "Team", required: true },
   teamAScore: { type: Number, default: 0 },
@@ -10,10 +10,13 @@ const matchSchema = new mongoose.Schema({
   playerStats: [
     {
       player: { type: mongoose.Schema.Types.ObjectId, ref: "Player", required: true },
-      raidPoints: { type: [Number], default: [] }, // Stores each raid score
-      defensePoints: { type: [Number], default: [] }, // Stores each defense score
+      raidPoints: { type: [Number], default: [] },
+      defensePoints: { type: [Number], default: [] },
     },
   ],
+  halfTime: { type: Boolean, default: false },
+  teamAMat: { type: Number, default: 7 }, // New field for players on mat
+  teamBMat: { type: Number, default: 7 }, // New field for players on mat
 });
 
 

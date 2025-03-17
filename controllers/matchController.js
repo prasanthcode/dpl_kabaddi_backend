@@ -25,13 +25,34 @@ exports.setMatchCompleted = async (req, res) => {
     if (!updatedMatch) {
       return res.status(404).json({ message: "Match not found" });
     }
-
     res.json(updatedMatch);
   } catch (error) {
     console.error("Error updating match:", error);
     res.status(500).json({ message: "Internal server error" });
   }
 };
+exports.setHalfTimeStatus = async (req, res) => {
+  try {
+    const { matchId } = req.params;
+
+    // Update match document in MongoDB
+    const updatedMatch = await Match.findByIdAndUpdate(
+      matchId,
+      { halfTime: true }, // Set HT status to true
+      { new: true }
+    );
+
+    if (!updatedMatch) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    res.json({ message: "Half Time status updated", match: updatedMatch });
+  } catch (error) {
+    console.error("Error updating Half Time status:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 exports.getMatchStats = async (req, res) => {
   try {
     const { matchId } = req.params;
@@ -174,21 +195,99 @@ exports.getMatchStats = async (req, res) => {
 //   }
 // };
 
+// exports.getPointsTable = async (req, res) => {
+//   try {
+//     const matches = await Match.find({ status: "Completed" }).populate("teamA teamB", "name");
+
+//     const pointsTable = {};
+
+//     matches.forEach((match) => {
+//       const { teamA, teamB, teamAScore, teamBScore } = match;
+
+//       if (!pointsTable[teamA._id]) {
+//         pointsTable[teamA._id] = { teamId: teamA._id, teamName: teamA.name, wins: 0, losses: 0, ties: 0, matchesPlayed: 0, pointsDifference: 0 ,points:0};
+//       }
+//       if (!pointsTable[teamB._id]) {
+//         pointsTable[teamB._id] = { teamId: teamB._id, teamName: teamB.name, wins: 0, losses: 0, ties: 0, matchesPlayed: 0, pointsDifference: 0 ,points:0 };
+//       }
+
+//       pointsTable[teamA._id].matchesPlayed++;
+//       pointsTable[teamB._id].matchesPlayed++;
+//       pointsTable[teamA._id].pointsDifference += teamAScore - teamBScore;
+//       pointsTable[teamB._id].pointsDifference += teamBScore - teamAScore;
+
+//       if (teamAScore > teamBScore) {
+//         pointsTable[teamA._id].wins++;
+//         pointsTable[teamA._id].points=pointsTable[teamA._id].points+2,
+//         pointsTable[teamB._id].losses++;
+//       } else if (teamBScore > teamAScore) {
+//         pointsTable[teamB._id].wins++;
+//         pointsTable[teamB._id].points=pointsTable[teamB._id].points+2,
+
+//         pointsTable[teamA._id].losses++;
+//       } else {
+//         pointsTable[teamA._id].ties++;
+//         pointsTable[teamB._id].points++,
+//         pointsTable[teamA._id].points++,
+
+//         pointsTable[teamB._id].ties++;
+//       }
+//     });
+//     const sortedPointsTable = Object.values(pointsTable).sort((a, b) => {
+//       if (b.points !== a.points) return b.points - a.points; // Sort by points
+//       if (b.wins !== a.wins) return b.wins - a.wins; // Sort by wins
+//       return b.pointsDifference - a.pointsDifference; // Sort by score difference
+//     });
+//     res.json(Object.values(sortedPointsTable));
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// };
+
+exports.getHalfTimeStatus = async (req, res) => {
+  try {
+    const { matchId } = req.params;
+
+    // Fetch match from MongoDB
+    const match = await Match.findById(matchId).select("halfTime");
+
+    if (!match) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    res.json({ halfTime: match.halfTime });
+  } catch (error) {
+    console.error("Error fetching Half Time status:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
 exports.getPointsTable = async (req, res) => {
   try {
+    // Fetch all teams
+    const allTeams = await Team.find({}, "name");
+
+    // Initialize points table with all teams
+    const pointsTable = {};
+    allTeams.forEach((team) => {
+      pointsTable[team._id] = {
+        teamId: team._id,
+        teamName: team.name,
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        matchesPlayed: 0,
+        pointsDifference: 0,
+        points: 0
+      };
+    });
+
+    // Fetch completed matches
     const matches = await Match.find({ status: "Completed" }).populate("teamA teamB", "name");
 
-    const pointsTable = {};
-
+    // Process completed matches
     matches.forEach((match) => {
       const { teamA, teamB, teamAScore, teamBScore } = match;
-
-      if (!pointsTable[teamA._id]) {
-        pointsTable[teamA._id] = { teamId: teamA._id, teamName: teamA.name, wins: 0, losses: 0, ties: 0, matchesPlayed: 0, pointsDifference: 0 ,points:0};
-      }
-      if (!pointsTable[teamB._id]) {
-        pointsTable[teamB._id] = { teamId: teamB._id, teamName: teamB.name, wins: 0, losses: 0, ties: 0, matchesPlayed: 0, pointsDifference: 0 ,points:0 };
-      }
 
       pointsTable[teamA._id].matchesPlayed++;
       pointsTable[teamB._id].matchesPlayed++;
@@ -197,27 +296,28 @@ exports.getPointsTable = async (req, res) => {
 
       if (teamAScore > teamBScore) {
         pointsTable[teamA._id].wins++;
-        pointsTable[teamA._id].points=pointsTable[teamA._id].points+2,
+        pointsTable[teamA._id].points += 2;
         pointsTable[teamB._id].losses++;
       } else if (teamBScore > teamAScore) {
         pointsTable[teamB._id].wins++;
-        pointsTable[teamB._id].points=pointsTable[teamB._id].points+2,
-
+        pointsTable[teamB._id].points += 2;
         pointsTable[teamA._id].losses++;
       } else {
         pointsTable[teamA._id].ties++;
-        pointsTable[teamB._id].points++,
-        pointsTable[teamA._id].points++,
-
         pointsTable[teamB._id].ties++;
+        pointsTable[teamA._id].points++;
+        pointsTable[teamB._id].points++;
       }
     });
+
+    // Sort teams based on points, wins, and points difference
     const sortedPointsTable = Object.values(pointsTable).sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points; // Sort by points
       if (b.wins !== a.wins) return b.wins - a.wins; // Sort by wins
-      return b.pointsDifference - a.pointsDifference; // Sort by score difference
+      return b.pointsDifference - a.pointsDifference; // Sort by points difference
     });
-    res.json(Object.values(sortedPointsTable));
+
+    res.json(sortedPointsTable);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -329,30 +429,33 @@ exports.getMatchStatsLive = async (req, res) => {
 
 exports.getMatchScores = async (req, res) => {
   try {
-      const { matchId } = req.params; // Get matchId from URL parameters
+    const { matchId } = req.params; // Get matchId from URL parameters
 
-      const match = await Match.findById(matchId).populate("teamA teamB"); // Populate team details
-      if (!match) {
-          return res.status(404).json({ message: "Match not found" });
-      }
+    const match = await Match.findById(matchId).populate("teamA teamB"); // Populate team details
+    if (!match) {
+      return res.status(404).json({ message: "Match not found" });
+    }
 
-      res.status(200).json({
-          teamA: {
-              name: match.teamA.name,
-              score: match.teamAScore,
-              logo: match.teamA.logo,
-          },
-          teamB: {
-              name: match.teamB.name,
-              score: match.teamBScore,
-              logo: match.teamB.logo,
-
-          }
-      });
+    res.status(200).json({
+      teamA: {
+        name: match.teamA.name,
+        score: match.teamAScore,
+        logo: match.teamA.logo,
+        matCount: match.teamAMat, // Add teamAMat
+      },
+      teamB: {
+        name: match.teamB.name,
+        score: match.teamBScore,
+        logo: match.teamB.logo,
+        matCount: match.teamBMat, // Add teamBMat
+      },
+      halfTime:match.halfTime,
+    });
   } catch (error) {
-      res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.getPlayersOfMatch = async (req, res) => {
   try {
@@ -465,18 +568,41 @@ exports.getCompletedMatches = async (req, res) => {
 };
 
 // @desc Create a new match
+exports.updateTeamMat = async (req, res) => {
+  try {
+    const { matchId } = req.params;
+    const { teamAMat, teamBMat } = req.body; // Get the new values from request
+
+    // Find and update the match
+    const updatedMatch = await Match.findByIdAndUpdate(
+      matchId,
+      { ...(teamAMat !== undefined && { teamAMat }), ...(teamBMat !== undefined && { teamBMat }) },
+      { new: true }
+    );
+
+    if (!updatedMatch) {
+      return res.status(404).json({ error: "Match not found" });
+    }
+
+    res.json({ message: "Updated team mat players successfully", match: updatedMatch });
+  } catch (error) {
+    console.error("Error updating team mat players:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
 
 exports.getOngoingMatches = async (req, res) => {
   try {
     const matches = await Match.find({ status: "Ongoing" })
       .populate("teamA", "name logo")
       .populate("teamB", "name logo")
-      .select(" _id date teamA teamB teamAScore teamBScore matchNumber").limit(1);
+      .select(" _id date teamA teamB teamAScore teamBScore matchNumber halfTime").limit(1);
 
     const formattedMatches = matches.map(match => ({
       matchId:match._id,
       date: match.date,
       matchNumber:match.matchNumber,
+      halfTime: match.halfTime,
       teamA: {
         name: match.teamA.name,
         logo: match.teamA.logo,
@@ -499,7 +625,7 @@ exports.getOngoingMatches = async (req, res) => {
 
 exports.createMatch = async (req, res) => {
   try {
-    const { teamA, teamB } = req.body;
+    const { teamA, teamB,matchNumber } = req.body;
 
     // Fetch players from both teams
     const teamAPlayers = await Player.find({ team: teamA }).select("_id");
@@ -514,6 +640,7 @@ exports.createMatch = async (req, res) => {
 
     // Create new match with initialized playerStats
     const newMatch = new Match({
+      matchNumber,
       teamA,
       teamB,
       playerStats,
