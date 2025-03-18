@@ -32,15 +32,15 @@ const Team = require("../models/Team");
 exports.getTeams = async (req, res) => {
   try {
     const cacheKey = "teams_data";
-    
+
     // Check if data exists in Redis
     const cachedData = await redis.get(cacheKey);
     if (cachedData) {
       return res.status(200).json(JSON.parse(cachedData)); // Return cached response
     }
 
-    // Fetch from MongoDB if not in cache
-    const teams = await Team.find({}, "_id name logo");
+    // Fetch from MongoDB, sorted alphabetically by name
+    const teams = await Team.find({}, "_id name logo").sort({ name: 1 });
 
     // Store in Redis with an expiration time (e.g., 1 hour = 3600 seconds)
     await redis.set(cacheKey, JSON.stringify(teams), "EX", 3600);
@@ -50,6 +50,7 @@ exports.getTeams = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // @desc Create a new team
 // exports.createTeam = async (req, res) => {

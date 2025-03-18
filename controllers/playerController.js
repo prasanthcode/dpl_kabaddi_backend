@@ -39,13 +39,15 @@ exports.getPlayersByTeam = async (req, res) => {
     const { teamId } = req.params; // Get teamId from URL params
     const players = await Player.find({ team: teamId }) // Filter players by teamId
       .populate("team", "name") // Populate team name only
-      .select("name profilePic"); // Retrieve player's name and profilePic
+      .select("name profilePic order") // Retrieve player's name, profilePic, and order
+      .sort({ order: 1 }); // Sort by order in ascending order
 
     res.status(200).json(players);
   } catch (error) {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 // @desc Create a new player

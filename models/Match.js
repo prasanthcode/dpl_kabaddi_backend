@@ -7,6 +7,7 @@ const matchSchema = new mongoose.Schema({
   teamBScore: { type: Number, default: 0 },
   date: { type: Date, default: Date.now },
   status: { type: String, enum: ["Upcoming", "Ongoing", "Completed"], default: "Upcoming" },
+  order: { type: Number, default: 0 },
   playerStats: [
     {
       player: { type: mongoose.Schema.Types.ObjectId, ref: "Player", required: true },
