@@ -106,60 +106,18 @@ matchSchema.methods.popPoints = async function (playerId, type) {
   return removedPoint;
 };
 
-// matchSchema.statics.getTopRaiders = async function () {
-//   const topRaiders = await this.aggregate([
-//     { $unwind: "$playerStats" }, // Flatten playerStats array
-//     {
-//       $project: {
-//         player: "$playerStats.player",
-//         totalRaidPoints: { $sum: "$playerStats.raidPoints" }, // Sum raid points
-//       },
-//     },
-//     { $match: { totalRaidPoints: { $gt: 0 } } }, // Remove players with 0 points
-//     { $sort: { totalRaidPoints: -1 } }, // Sort in descending order
-//     { $limit: 10 }, // Limit to top 10 (optional)
-//     {
-//       $lookup: {
-//         from: "players",
-//         localField: "player",
-//         foreignField: "_id",
-//         as: "playerDetails",
-//       },
-//     },
-//     { $unwind: "$playerDetails" }, // Unwind playerDetails
-//     {
-//       $lookup: {
-//         from: "teams",
-//         localField: "playerDetails.team",
-//         foreignField: "_id",
-//         as: "teamDetails",
-//       },
-//     },
-//     { $unwind: "$teamDetails" }, // Unwind teamDetails
-//     {
-//       $project: {
-//         _id: 0,
-//         playerId: "$playerDetails._id",
-//         name: "$playerDetails.name",
-//         teamName: "$teamDetails.name",
-//         totalRaidPoints: 1,
-//       },
-//     },
-//   ]);
-
-//   return topRaiders;
-// };
 matchSchema.statics.getTopRaiders = async function () {
   const topRaiders = await this.aggregate([
     { $unwind: "$playerStats" }, // Flatten playerStats array
     {
       $group: {
         _id: "$playerStats.player",
-        totalRaidPoints: { $sum: { $sum: "$playerStats.raidPoints" } }, // Sum raid points across all matches
+        totalRaidPoints: { $sum: { $sum: "$playerStats.raidPoints" } }, // Sum raid points
+        matchesPlayed: { $sum: 1 }, // Count matches played
       },
     },
     { $match: { totalRaidPoints: { $gt: 0 } } }, // Remove players with 0 points
-    { $sort: { totalRaidPoints: -1 } }, // Sort in descending order
+    { $sort: { totalRaidPoints: -1, matchesPlayed: 1 } }, // Sort by points (desc) & matches played (asc)
     { $limit: 10 }, // Get top 10 raiders
     {
       $lookup: {
@@ -185,7 +143,9 @@ matchSchema.statics.getTopRaiders = async function () {
         playerId: "$playerDetails._id",
         name: "$playerDetails.name",
         teamName: "$teamDetails.name",
+        profilePic: "$playerDetails.profilePic", // Include profile picture
         totalRaidPoints: 1,
+        matchesPlayed: 1, // Include matches played in the response
       },
     },
   ]);
@@ -193,22 +153,23 @@ matchSchema.statics.getTopRaiders = async function () {
   return topRaiders;
 };
 
+
 // matchSchema.statics.getTopDefenders = async function () {
 //   const topDefenders = await this.aggregate([
 //     { $unwind: "$playerStats" }, // Flatten playerStats array
 //     {
-//       $project: {
-//         player: "$playerStats.player",
-//         totalDefensePoints: { $sum: "$playerStats.defensePoints" }, // Sum defense points
+//       $group: {
+//         _id: "$playerStats.player",
+//         totalDefensePoints: { $sum: { $sum: "$playerStats.defensePoints" } }, // Sum defense points across all matches
 //       },
 //     },
 //     { $match: { totalDefensePoints: { $gt: 0 } } }, // Remove players with 0 points
 //     { $sort: { totalDefensePoints: -1 } }, // Sort in descending order
-//     { $limit: 10 }, // Limit to top 10 (optional)
+//     { $limit: 10 }, // Get top 10 defenders
 //     {
 //       $lookup: {
 //         from: "players",
-//         localField: "player",
+//         localField: "_id",
 //         foreignField: "_id",
 //         as: "playerDetails",
 //       },
@@ -242,11 +203,12 @@ matchSchema.statics.getTopDefenders = async function () {
     {
       $group: {
         _id: "$playerStats.player",
-        totalDefensePoints: { $sum: { $sum: "$playerStats.defensePoints" } }, // Sum defense points across all matches
+        totalDefensePoints: { $sum: { $sum: "$playerStats.defensePoints" } }, // Sum defense points
+        matchesPlayed: { $sum: 1 }, // Count matches played
       },
     },
     { $match: { totalDefensePoints: { $gt: 0 } } }, // Remove players with 0 points
-    { $sort: { totalDefensePoints: -1 } }, // Sort in descending order
+    { $sort: { totalDefensePoints: -1, matchesPlayed: 1 } }, // Sort by points (desc) & matches played (asc)
     { $limit: 10 }, // Get top 10 defenders
     {
       $lookup: {
@@ -272,7 +234,9 @@ matchSchema.statics.getTopDefenders = async function () {
         playerId: "$playerDetails._id",
         name: "$playerDetails.name",
         teamName: "$teamDetails.name",
+        profilePic: "$playerDetails.profilePic", // Include profile picture
         totalDefensePoints: 1,
+        matchesPlayed: 1, // Include matches played in response
       },
     },
   ]);
