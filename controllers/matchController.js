@@ -500,18 +500,29 @@ exports.getPlayersOfMatch = async (req, res) => {
   }
 };
 
-
 exports.getUpcomingMatches = async (req, res) => {
   try {
-    const matches = await Match.find({ status: "Upcoming" })
+    // Extract limit from query params (optional)
+    const limit = req.query.limit ? parseInt(req.query.limit) : null;
+
+    // Query upcoming matches sorted by matchNumber and date (both descending)
+    let query = Match.find({ status: "Upcoming" })
       .populate("teamA", "name logo")
       .populate("teamB", "name logo")
+      .sort({  date: 1,matchNumber: -1 }) // Sort: matchNumber (high to low), date (latest first)
       .select("_id date teamA teamB matchNumber");
 
-    const formattedMatches = matches.map(match => ({
-      matchId:match._id,
-      matchNumber:match.matchNumber,
+    // Apply limit if provided
+    if (limit) {
+      query = query.limit(limit);
+    }
 
+    const matches = await query;
+
+    // Format response
+    const formattedMatches = matches.map(match => ({
+      matchId: match._id,
+      matchNumber: match.matchNumber,
       date: match.date,
       teamA: {
         name: match.teamA.name,
@@ -529,6 +540,34 @@ exports.getUpcomingMatches = async (req, res) => {
   }
 };
 
+// exports.getUpcomingMatches = async (req, res) => {
+//   try {
+//     const matches = await Match.find({ status: "Upcoming" })
+//       .populate("teamA", "name logo")
+//       .populate("teamB", "name logo")
+//       .select("_id date teamA teamB matchNumber");
+
+//     const formattedMatches = matches.map(match => ({
+//       matchId:match._id,
+//       matchNumber:match.matchNumber,
+
+//       date: match.date,
+//       teamA: {
+//         name: match.teamA.name,
+//         logo: match.teamA.logo
+//       },
+//       teamB: {
+//         name: match.teamB.name,
+//         logo: match.teamB.logo
+//       }
+//     }));
+
+//     res.status(200).json(formattedMatches);
+//   } catch (error) {
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
 exports.getCompletedMatches = async (req, res) => {
   try {
     let { limit } = req.query;  // Get the limit from query params
@@ -537,6 +576,7 @@ exports.getCompletedMatches = async (req, res) => {
     let query = Match.find({ status: "Completed" })
       .populate("teamA", "name logo")
       .populate("teamB", "name logo")
+      .sort({  date: -1,matchNumber: -1 })
       .select("_id date teamA teamB teamAScore teamBScore matchNumber");
 
     if (limit) {
