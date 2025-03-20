@@ -135,114 +135,6 @@ exports.getMatchStats = async (req, res) => {
   }
 };
 
-// exports.getMatchStats = async (req, res) => {
-//   try {
-//     const { matchId } = req.params;
-
-//     const match = await Match.findById(matchId)
-//       .populate({ path: "teamA", select: "name logo" })
-//       .populate({ path: "teamB", select: "name logo" })
-//       .populate({
-//         path: "playerStats.player",
-//         select: "name team",
-//         populate: { path: "team", select: "name" }, // Populate team name
-//       });
-
-//     if (!match) {
-//       return res.status(404).json({ message: "Match not found" });
-//     }
-
-//     const teamA = { name: match.teamA.name, logo: match.teamA.logo, score: match.teamAScore };
-//     const teamB = { name: match.teamB.name, logo: match.teamB.logo, score: match.teamBScore };
-
-//     let raiders = [];
-//     let defenders = [];
-//     let teamATotalRaidPoints = 0;
-//     let teamATotalDefensePoints = 0;
-//     let teamBTotalRaidPoints = 0;
-//     let teamBTotalDefensePoints = 0;
-
-//     match.playerStats.forEach(({ player, raidPoints, defensePoints }) => {
-//       const totalRaidPoints = raidPoints.reduce((sum, val) => sum + val, 0);
-//       const totalDefensePoints = defensePoints.reduce((sum, val) => sum + val, 0);
-
-//       const playerData = { name: player.name, team: player.team.name };
-
-//       raiders.push({ ...playerData, totalRaidPoints });
-//       defenders.push({ ...playerData, totalDefensePoints });
-
-//       if (player.team.name === teamA.name) {
-//         teamATotalRaidPoints += totalRaidPoints;
-//         teamATotalDefensePoints += totalDefensePoints;
-//       } else if (player.team.name === teamB.name) {
-//         teamBTotalRaidPoints += totalRaidPoints;
-//         teamBTotalDefensePoints += totalDefensePoints;
-//       }
-//     });
-
-//     // Helper function to get top 5 players
-//     // const getTop5 = (arr, key) => arr.sort((a, b) => b[key] - a[key]).slice(0, 5);
-//     const getTop5 = (arr, key) => arr.sort((a, b) => b[key] - a[key]);
-
-//     res.json({
-//       teamA: { ...teamA, totalRaidPoints: teamATotalRaidPoints, totalDefensePoints: teamATotalDefensePoints },
-//       teamB: { ...teamB, totalRaidPoints: teamBTotalRaidPoints, totalDefensePoints: teamBTotalDefensePoints },
-//       topRaiders: getTop5(raiders, "totalRaidPoints"),
-//       topDefenders: getTop5(defenders, "totalDefensePoints"),
-//     });
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-// exports.getPointsTable = async (req, res) => {
-//   try {
-//     const matches = await Match.find({ status: "Completed" }).populate("teamA teamB", "name");
-
-//     const pointsTable = {};
-
-//     matches.forEach((match) => {
-//       const { teamA, teamB, teamAScore, teamBScore } = match;
-
-//       if (!pointsTable[teamA._id]) {
-//         pointsTable[teamA._id] = { teamId: teamA._id, teamName: teamA.name, wins: 0, losses: 0, ties: 0, matchesPlayed: 0, pointsDifference: 0 ,points:0};
-//       }
-//       if (!pointsTable[teamB._id]) {
-//         pointsTable[teamB._id] = { teamId: teamB._id, teamName: teamB.name, wins: 0, losses: 0, ties: 0, matchesPlayed: 0, pointsDifference: 0 ,points:0 };
-//       }
-
-//       pointsTable[teamA._id].matchesPlayed++;
-//       pointsTable[teamB._id].matchesPlayed++;
-//       pointsTable[teamA._id].pointsDifference += teamAScore - teamBScore;
-//       pointsTable[teamB._id].pointsDifference += teamBScore - teamAScore;
-
-//       if (teamAScore > teamBScore) {
-//         pointsTable[teamA._id].wins++;
-//         pointsTable[teamA._id].points=pointsTable[teamA._id].points+2,
-//         pointsTable[teamB._id].losses++;
-//       } else if (teamBScore > teamAScore) {
-//         pointsTable[teamB._id].wins++;
-//         pointsTable[teamB._id].points=pointsTable[teamB._id].points+2,
-
-//         pointsTable[teamA._id].losses++;
-//       } else {
-//         pointsTable[teamA._id].ties++;
-//         pointsTable[teamB._id].points++,
-//         pointsTable[teamA._id].points++,
-
-//         pointsTable[teamB._id].ties++;
-//       }
-//     });
-//     const sortedPointsTable = Object.values(pointsTable).sort((a, b) => {
-//       if (b.points !== a.points) return b.points - a.points; // Sort by points
-//       if (b.wins !== a.wins) return b.wins - a.wins; // Sort by wins
-//       return b.pointsDifference - a.pointsDifference; // Sort by score difference
-//     });
-//     res.json(Object.values(sortedPointsTable));
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// };
 
 exports.getHalfTimeStatus = async (req, res) => {
   try {
@@ -379,6 +271,7 @@ exports.getMatchTotalPoints = async (req, res) => {
 };
 
 
+
 exports.getMatchStatsLive = async (req, res) => {
   try {
     const { matchId } = req.params;
@@ -397,7 +290,7 @@ exports.getMatchStatsLive = async (req, res) => {
         select: "name team",
         populate: { path: "team", select: "name" },
       });
-    
+
     if (!match) {
       return res.status(404).json({ message: "Match not found" });
     }
@@ -409,22 +302,29 @@ exports.getMatchStatsLive = async (req, res) => {
     match.playerStats.forEach(({ player, raidPoints, defensePoints }) => {
       if (player.team.name !== selectedTeam) return; // Filter players by team
 
-      raiders.push({ name: player.name, totalRaidPoints: raidPoints.reduce((sum, val) => sum + val, 0) });
-      defenders.push({ name: player.name, totalDefensePoints: defensePoints.reduce((sum, val) => sum + val, 0) });
+      const totalRaidPoints = raidPoints.reduce((sum, val) => sum + val, 0);
+      const totalDefensePoints = defensePoints.reduce((sum, val) => sum + val, 0);
+
+      if (totalRaidPoints > 0) {
+        raiders.push({ name: player.name, totalRaidPoints });
+      }
+      if (totalDefensePoints > 0) {
+        defenders.push({ name: player.name, totalDefensePoints });
+      }
     });
 
-    // Get top 5 players
-    const getTop5 = (arr, key) => arr.sort((a, b) => b[key] - a[key]).slice(0, 5);
+    // Sort from highest to lowest
+    raiders.sort((a, b) => b.totalRaidPoints - a.totalRaidPoints);
+    defenders.sort((a, b) => b.totalDefensePoints - a.totalDefensePoints);
 
     res.json({
-      topRaiders: getTop5(raiders, "totalRaidPoints"),
-      topDefenders: getTop5(defenders, "totalDefensePoints"),
+      topRaiders: raiders,
+      topDefenders: defenders,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 exports.getMatchScores = async (req, res) => {
@@ -540,33 +440,6 @@ exports.getUpcomingMatches = async (req, res) => {
   }
 };
 
-// exports.getUpcomingMatches = async (req, res) => {
-//   try {
-//     const matches = await Match.find({ status: "Upcoming" })
-//       .populate("teamA", "name logo")
-//       .populate("teamB", "name logo")
-//       .select("_id date teamA teamB matchNumber");
-
-//     const formattedMatches = matches.map(match => ({
-//       matchId:match._id,
-//       matchNumber:match.matchNumber,
-
-//       date: match.date,
-//       teamA: {
-//         name: match.teamA.name,
-//         logo: match.teamA.logo
-//       },
-//       teamB: {
-//         name: match.teamB.name,
-//         logo: match.teamB.logo
-//       }
-//     }));
-
-//     res.status(200).json(formattedMatches);
-//   } catch (error) {
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
 
 exports.getCompletedMatches = async (req, res) => {
   try {
@@ -703,24 +576,51 @@ exports.updateMatch = async (req, res) => {
     res.status(404).json({ message: "Match not found" });
   }
 };
+const clearTopPlayersCache = async () => {
+  try {
+    await redis.del('topPlayers');
+  } catch (error) {
+    console.error('Failed to clear topPlayers cache:', error);
+  }
+
+};
 exports.addPoints = async (req, res) => {
-    try {
-      const { matchId, playerId, points, type } = req.body;
-  
-      const match = await Match.findById(matchId);
-      if (!match) {
-        return res.status(404).json({ message: "Match not found" });
-      }
-  
-      
-      await match.addPoints(playerId, points,type);
-      
-  
-      res.status(200).json(match);
-    } catch (error) {
-      res.status(400).json({ message: error.message });
+  try {
+    const { matchId, playerId, points, type } = req.body;
+
+    const match = await Match.findById(matchId);
+    if (!match) {
+      return res.status(404).json({ message: "Match not found" });
     }
-  };
+
+    await match.addPoints(playerId, points, type);
+    
+    await clearTopPlayersCache(); // Invalidate cache
+
+    res.status(200).json(match);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// exports.addPoints = async (req, res) => {
+//     try {
+//       const { matchId, playerId, points, type } = req.body;
+  
+//       const match = await Match.findById(matchId);
+//       if (!match) {
+//         return res.status(404).json({ message: "Match not found" });
+//       }
+  
+      
+//       await match.addPoints(playerId, points,type);
+      
+  
+//       res.status(200).json(match);
+//     } catch (error) {
+//       res.status(400).json({ message: error.message });
+//     }
+//   };
   exports.addPointsToOnlyTeam = async (req, res) => {
     try {
       const { matchId, teamId, points } = req.body; // Ensure matchId is included
@@ -749,15 +649,15 @@ exports.undoPlayerPoints = async (req, res) => {
 
     const removedPoint = await match.popPoints(playerId, type);
 
+    await clearTopPlayersCache(); // Invalidate cache
+
     res.status(200).json({
       message: `Removed ${removedPoint} point(s) from player ${playerId}`,
-      
     });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
 };
-
 exports.undoTeamPoints = async (req, res) => {
   try {
     const { matchId, teamId, points } = req.body;

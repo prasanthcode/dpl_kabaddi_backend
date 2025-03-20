@@ -1,5 +1,6 @@
 const Match = require("../models/Match");
 const Player = require("../models/Player");
+const redis = require("../config/redisConnect"); // Import Redis connection
 
 // @desc Get all players
 exports.getPlayers = async (req, res) => {
@@ -17,22 +18,48 @@ exports.getPlayers = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-exports.getRaiders = async (req, res) => {
-  try {
-    const topRaiders = await Match.getTopRaiders();
-    res.json(topRaiders);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-}
-exports.getDefenders = async (req, res) => {
-  try {
-    const topDefenders = await Match.getTopDefenders();
-    res.json(topDefenders);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
+// exports.getRaiders = async (req, res) => {
+//   try {
+//     const topRaiders = await Match.getTopRaiders();
+//     res.json(topRaiders);
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// }
+// exports.getDefenders = async (req, res) => {
+//   try {
+//     const topDefenders = await Match.getTopDefenders();
+//     res.json(topDefenders);
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// };
+
+// exports.getTopPlayers = async (req, res) => {
+//   try {
+//     // Check if data exists in Redis cache
+//     const cachedData = await redis.get('topPlayers');
+
+//     if (cachedData) {
+//       return res.json(JSON.parse(cachedData)); // Return cached data if available
+//     }
+
+//     // Fetch data from the database
+//     const [topRaiders, topDefenders] = await Promise.all([
+//       Match.getTopRaiders(),
+//       Match.getTopDefenders()
+//     ]);
+
+//     const response = { topRaiders, topDefenders };
+
+//     // Store data in Redis with an expiration time of 10 minutes (600 seconds)
+//     await redis.set('topPlayers', JSON.stringify(response), 'EX', 600);
+
+//     res.json(response);
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// };
 
 exports.getPlayersByTeam = async (req, res) => {
   try {

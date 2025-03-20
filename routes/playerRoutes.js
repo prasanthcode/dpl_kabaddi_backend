@@ -1,11 +1,12 @@
 const express = require("express");
-const { getPlayers, createPlayer, deletePlayer , bulkPlayer, getPlayersByTeam, getRaiders, getDefenders, setProfilePic} = require("../controllers/playerController");
+const { getPlayers, createPlayer, deletePlayer , bulkPlayer, getPlayersByTeam, setProfilePic} = require("../controllers/playerController");
 
 const router = express.Router();
 
 router.get("/", getPlayers);
-router.get("/topraiders", getRaiders);
-router.get("/topdefenders", getDefenders);
+// router.get("/topraiders", getRaiders);
+// router.get("/topdefenders", getDefenders);
+// router.get("/topplayers",getTopPlayers);
 router.get("/:teamId", getPlayersByTeam);
 router.post("/", createPlayer);
 router.delete("/:id", deletePlayer);
