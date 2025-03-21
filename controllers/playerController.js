@@ -1,5 +1,6 @@
 const Match = require("../models/Match");
 const Player = require("../models/Player");
+const Team = require("../models/Team");
 const redis = require("../config/redisConnect"); // Import Redis connection
 
 // @desc Get all players
@@ -18,6 +19,99 @@ exports.getPlayers = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+exports.getPlayerDetails = async (req, res) => {
+  try {
+    const { playerId } = req.params;
+
+    // Fetch player details
+    const player = await Player.findById(playerId).populate("team");
+    if (!player) return res.status(404).json({ error: "Player not found" });
+
+    // Find all completed matches where the player participated
+    const matches = await Match.find({
+      "playerStats.player": playerId,
+      status: "Completed",
+    })
+      .populate("teamA teamB")
+      .lean();
+
+    let matchStats = [];
+    let totalRaidPoints = 0,
+      totalDefensePoints = 0,
+      totalPoints = 0,
+      totalSuper10s = 0,
+      totalHigh5s = 0,
+      totalSuperRaids = 0;
+
+    matches.forEach((match) => {
+      const playerStats = match.playerStats.find((p) => p.player.toString() === playerId);
+
+      if (playerStats) {
+        const raidPoints = playerStats.raidPoints.reduce((a, b) => a + b, 0);
+        const defensePoints = playerStats.defensePoints.reduce((a, b) => a + b, 0);
+        const matchTotalPoints = raidPoints + defensePoints;
+
+        // Super 10s (10+ raid points)
+        const super10 = raidPoints >= 10 ? 1 : 0;
+
+        // High 5s (5+ defense points)
+        const high5 = defensePoints >= 5 ? 1 : 0;
+
+        // Super Raids (Any individual raid with 3+ points)
+        const superRaids = playerStats.raidPoints.filter((rp) => rp >= 3).length;
+
+        // Track total stats
+        totalRaidPoints += raidPoints;
+        totalDefensePoints += defensePoints;
+        totalPoints += matchTotalPoints;
+        totalSuper10s += super10;
+        totalHigh5s += high5;
+        totalSuperRaids += superRaids;
+
+        // Determine opponent team
+        const opponent =
+          match.teamA._id.toString() === player.team._id.toString()
+            ? match.teamB
+            : match.teamA;
+
+        // Store match-wise details
+        matchStats.push({
+          matchId: match._id,
+          opponentTeam: { name: opponent.name, logo: opponent.logo },
+          raidPoints,
+          defensePoints,
+          totalPoints: matchTotalPoints,
+          super10,
+          high5,
+          superRaids,
+        });
+      }
+    });
+
+    // Final response
+    res.json({
+      playerId,
+      name: player.name,
+      profilePic: player.profilePic,
+      team: { name: player.team.name, logo: player.team.logo },
+      totalStats: {
+        totalRaidPoints,
+        totalDefensePoints,
+        totalPoints,
+        totalSuper10s,
+        totalHigh5s,
+        totalSuperRaids,
+      },
+      matchStats,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+
 // exports.getRaiders = async (req, res) => {
 //   try {
 //     const topRaiders = await Match.getTopRaiders();
@@ -66,7 +160,7 @@ exports.getPlayersByTeam = async (req, res) => {
     const { teamId } = req.params; // Get teamId from URL params
     const players = await Player.find({ team: teamId }) // Filter players by teamId
       .populate("team", "name") // Populate team name only
-      .select("name profilePic order") // Retrieve player's name, profilePic, and order
+      .select("name profilePic order _id") // Retrieve player's name, profilePic, and order
       .sort({ order: 1 }); // Sort by order in ascending order
 
     res.status(200).json(players);
