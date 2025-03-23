@@ -481,28 +481,28 @@ exports.getUpcomingMatches = async (req, res) => {
     }));
 
     // Required match types
-    const requiredMatchTypes = ["Eliminator", "Qualifier 1", "Qualifier 2", "Final"];
-    const existingMatchTypes = new Set(matches.map(match => match.matchType));
+    // const requiredMatchTypes = ["Eliminator", "Qualifier 1", "Qualifier 2", "Final"];
+    // const existingMatchTypes = new Set(matches.map(match => match.matchType));
 
     // Add missing match types with dummy data
-    requiredMatchTypes.forEach((matchType, index) => {
-      if (!existingMatchTypes.has(matchType)) {
-        formattedMatches.push({
-          matchId: `dummy-${matchType.toLowerCase().replace(/\s+/g, "-")}`,
-          matchType,
-          matchNumber: null,
-          date: "TBA",
-          teamA: {
-            name: "TBD",
-            logo: "https://placehold.co/100x100?text=DPL"
-          },
-          teamB: {
-            name: "TBD",
-            logo: "https://placehold.co/100x100?text=DPL"
-          }
-        });
-      }
-    });
+    // requiredMatchTypes.forEach((matchType, index) => {
+    //   if (!existingMatchTypes.has(matchType)) {
+    //     formattedMatches.push({
+    //       matchId: `dummy-${matchType.toLowerCase().replace(/\s+/g, "-")}`,
+    //       matchType,
+    //       matchNumber: null,
+    //       date: "TBA",
+    //       teamA: {
+    //         name: "TBD",
+    //         logo: "https://placehold.co/100x100?text=DPL"
+    //       },
+    //       teamB: {
+    //         name: "TBD",
+    //         logo: "https://placehold.co/100x100?text=DPL"
+    //       }
+    //     });
+    //   }
+    // });
 
     res.status(200).json(formattedMatches);
   } catch (error) {
