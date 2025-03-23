@@ -406,47 +406,109 @@ exports.getPlayersOfMatch = async (req, res) => {
   }
 };
 
+// exports.getUpcomingMatches = async (req, res) => {
+//   try {
+//     // Extract limit from query params (optional)
+//     const limit = req.query.limit ? parseInt(req.query.limit) : null;
+
+//     // Query upcoming matches sorted by matchNumber and date (both descending)
+//     let query = Match.find({ status: "Upcoming" })
+//       .populate("teamA", "name logo")
+//       .populate("teamB", "name logo")
+//       .sort({  date: 1,matchNumber: -1 }) // Sort: matchNumber (high to low), date (latest first)
+//       .select("_id date teamA teamB matchNumber matchType");
+
+//     // Apply limit if provided
+//     if (limit) {
+//       query = query.limit(limit);
+//     }
+
+//     const matches = await query;
+
+//     // Format response
+//     const formattedMatches = matches.map(match => ({
+//       matchId: match._id,
+//       matchType: match.matchType,
+//       matchNumber: match.matchNumber,
+//       date: match.date,
+//       teamA: {
+//         name: match.teamA.name,
+//         logo: match.teamA.logo
+//       },
+//       teamB: {
+//         name: match.teamB.name,
+//         logo: match.teamB.logo
+//       }
+//     }));
+
+//     res.status(200).json(formattedMatches);
+//   } catch (error) {
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
+
 exports.getUpcomingMatches = async (req, res) => {
   try {
-    // Extract limit from query params (optional)
     const limit = req.query.limit ? parseInt(req.query.limit) : null;
 
-    // Query upcoming matches sorted by matchNumber and date (both descending)
+    // Query upcoming matches sorted by date (ascending) and matchNumber (descending)
     let query = Match.find({ status: "Upcoming" })
       .populate("teamA", "name logo")
       .populate("teamB", "name logo")
-      .sort({  date: 1,matchNumber: -1 }) // Sort: matchNumber (high to low), date (latest first)
+      .sort({ date: 1, matchNumber: -1 })
       .select("_id date teamA teamB matchNumber matchType");
 
-    // Apply limit if provided
     if (limit) {
       query = query.limit(limit);
     }
 
-    const matches = await query;
+    let matches = await query;
 
     // Format response
-    const formattedMatches = matches.map(match => ({
+    let formattedMatches = matches.map(match => ({
       matchId: match._id,
       matchType: match.matchType,
       matchNumber: match.matchNumber,
       date: match.date,
       teamA: {
-        name: match.teamA.name,
-        logo: match.teamA.logo
+        name: match.teamA?.name || "TBD",
+        logo: match.teamA?.logo || "https://dummyimage.com/100"
       },
       teamB: {
-        name: match.teamB.name,
-        logo: match.teamB.logo
+        name: match.teamB?.name || "TBD",
+        logo: match.teamB?.logo || "https://dummyimage.com/100"
       }
     }));
+
+    // Required match types
+    const requiredMatchTypes = ["Eliminator", "Qualifier 1", "Qualifier 2", "Final"];
+    const existingMatchTypes = new Set(matches.map(match => match.matchType));
+
+    // Add missing match types with dummy data
+    requiredMatchTypes.forEach((matchType, index) => {
+      if (!existingMatchTypes.has(matchType)) {
+        formattedMatches.push({
+          matchId: `dummy-${matchType.toLowerCase().replace(/\s+/g, "-")}`,
+          matchType,
+          matchNumber: null,
+          date: "TBA",
+          teamA: {
+            name: "TBD",
+            logo: "https://placehold.co/100x100?text=DPL"
+          },
+          teamB: {
+            name: "TBD",
+            logo: "https://placehold.co/100x100?text=DPL"
+          }
+        });
+      }
+    });
 
     res.status(200).json(formattedMatches);
   } catch (error) {
     res.status(500).json({ message: "Server error" });
   }
 };
-
 
 exports.getCompletedMatches = async (req, res) => {
   try {
