@@ -5,6 +5,7 @@ const matchSchema = new mongoose.Schema({
   teamB: { type: mongoose.Schema.Types.ObjectId, ref: "Team", required: true },
   teamAScore: { type: Number, default: 0 },
   teamBScore: { type: Number, default: 0 },
+  matchType: { type: String, default: "" },
   date: { type: Date, default: Date.now },
   status: { type: String, enum: ["Upcoming", "Ongoing", "Completed"], default: "Upcoming" },
   order: { type: Number, default: 0 },

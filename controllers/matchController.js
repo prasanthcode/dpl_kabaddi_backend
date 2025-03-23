@@ -175,8 +175,14 @@ exports.getPointsTable = async (req, res) => {
     });
 
     // Fetch completed matches
-    const matches = await Match.find({ status: "Completed" }).populate("teamA teamB", "name");
-
+    // const matches = await Match.find({ status: "Completed" }).populate("teamA teamB", "name");
+    const matches = await Match.find({
+      status: "Completed",
+      $or: [
+        { matchType: { $exists: false } }, // matchType not present
+      ]
+    }).populate("teamA teamB", "name");
+    
     // Process completed matches
     matches.forEach((match) => {
       const { teamA, teamB, teamAScore, teamBScore } = match;
@@ -410,7 +416,7 @@ exports.getUpcomingMatches = async (req, res) => {
       .populate("teamA", "name logo")
       .populate("teamB", "name logo")
       .sort({  date: 1,matchNumber: -1 }) // Sort: matchNumber (high to low), date (latest first)
-      .select("_id date teamA teamB matchNumber");
+      .select("_id date teamA teamB matchNumber matchType");
 
     // Apply limit if provided
     if (limit) {
@@ -422,6 +428,7 @@ exports.getUpcomingMatches = async (req, res) => {
     // Format response
     const formattedMatches = matches.map(match => ({
       matchId: match._id,
+      matchType: match.matchType,
       matchNumber: match.matchNumber,
       date: match.date,
       teamA: {
