@@ -447,11 +447,100 @@ exports.getPlayersOfMatch = async (req, res) => {
 //   }
 // };
 
+// exports.getUpcomingMatches = async (req, res) => {
+//   try {
+//     const limit = req.query.limit ? parseInt(req.query.limit) : null;
+
+//     // Query upcoming matches sorted by date (ascending) and matchNumber (descending)
+//     let query = Match.find({ status: "Upcoming" })
+//       .populate("teamA", "name logo")
+//       .populate("teamB", "name logo")
+//       .sort({ date: 1, matchNumber: -1 })
+//       .select("_id date teamA teamB matchNumber matchType");
+
+//     if (limit) {
+//       query = query.limit(limit);
+//     }
+
+//     let matches = await query;
+
+//     // Format response
+//     let formattedMatches = matches.map(match => ({
+//       matchId: match._id,
+//       matchType: match.matchType,
+//       matchNumber: match.matchNumber,
+//       date: match.date,
+//       teamA: {
+//         name: match.teamA?.name || "TBD",
+//         logo: match.teamA?.logo || "https://dummyimage.com/100"
+//       },
+//       teamB: {
+//         name: match.teamB?.name || "TBD",
+//         logo: match.teamB?.logo || "https://dummyimage.com/100"
+//       }
+//     }));
+
+//     // Required match types
+//     // const requiredMatchTypes = ["Eliminator", "Qualifier 1", "Qualifier 2", "Final"];
+//     // const existingMatchTypes = new Set(matches.map(match => match.matchType));
+
+//     // Add missing match types with dummy data
+//     // requiredMatchTypes.forEach((matchType, index) => {
+//     //   if (!existingMatchTypes.has(matchType)) {
+//     //     formattedMatches.push({
+//     //       matchId: `dummy-${matchType.toLowerCase().replace(/\s+/g, "-")}`,
+//     //       matchType,
+//     //       matchNumber: null,
+//     //       date: "TBA",
+//     //       teamA: {
+//     //         name: "TBD",
+//     //         logo: "https://placehold.co/100x100?text=DPL"
+//     //       },
+//     //       teamB: {
+//     //         name: "TBD",
+//     //         logo: "https://placehold.co/100x100?text=DPL"
+//     //       }
+//     //     });
+//     //   }
+//     // });
+
+//     res.status(200).json(formattedMatches);
+//   } catch (error) {
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };   
+// before fixing dummy
 exports.getUpcomingMatches = async (req, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit) : null;
 
-    // Query upcoming matches sorted by date (ascending) and matchNumber (descending)
+    // Required match types in the playoff stage
+    const playoffStages = ["Eliminator", "Qualifier 1", "Qualifier 2", "Final"];
+
+    // Fetch all relevant matches (Completed, Ongoing, Upcoming)
+    let allMatches = await Match.find({ matchType: { $in: playoffStages } })
+      .populate("teamA", "name logo")
+      .populate("teamB", "name logo")
+      .select("matchType status teamA teamB teamAScore teamBScore");
+
+    let matchWinners = {};
+    let qualifier1Loser = null;
+    let completedMatches = new Set();
+
+    // Identify winners and track completed matches
+    allMatches.forEach(match => {
+      if (match.status === "Completed") {
+        const winner = match.teamAScore > match.teamBScore ? match.teamA : match.teamB;
+        matchWinners[match.matchType] = winner;
+        completedMatches.add(match.matchType);
+
+        if (match.matchType === "Qualifier 1") {
+          qualifier1Loser = match.teamAScore > match.teamBScore ? match.teamB : match.teamA;
+        }
+      }
+    });
+
+    // Fetch upcoming matches
     let query = Match.find({ status: "Upcoming" })
       .populate("teamA", "name logo")
       .populate("teamB", "name logo")
@@ -469,7 +558,7 @@ exports.getUpcomingMatches = async (req, res) => {
       matchId: match._id,
       matchType: match.matchType,
       matchNumber: match.matchNumber,
-      date: match.date,
+      date: match.date || "To be Announced",
       teamA: {
         name: match.teamA?.name || "TBD",
         logo: match.teamA?.logo || "https://dummyimage.com/100"
@@ -480,35 +569,46 @@ exports.getUpcomingMatches = async (req, res) => {
       }
     }));
 
-    // Required match types
-    // const requiredMatchTypes = ["Eliminator", "Qualifier 1", "Qualifier 2", "Final"];
-    // const existingMatchTypes = new Set(matches.map(match => match.matchType));
+    // Determine missing upcoming playoff matches and assign teams dynamically
+    playoffStages.forEach(matchType => {
+      if (!matches.some(m => m.matchType === matchType) && !completedMatches.has(matchType)) {
+        let dummyMatch = {
+          matchId: `dummy-${matchType.toLowerCase().replace(/\s+/g, "-")}`,
+          matchType,
+          matchNumber: null,
+          date: "To be Announced",
+          teamA: { name: "TBD", logo: "https://placehold.co/100x100?text=DPL" },
+          teamB: { name: "TBD", logo: "https://placehold.co/100x100?text=DPL" },
+        };
 
-    // Add missing match types with dummy data
-    // requiredMatchTypes.forEach((matchType, index) => {
-    //   if (!existingMatchTypes.has(matchType)) {
-    //     formattedMatches.push({
-    //       matchId: `dummy-${matchType.toLowerCase().replace(/\s+/g, "-")}`,
-    //       matchType,
-    //       matchNumber: null,
-    //       date: "TBA",
-    //       teamA: {
-    //         name: "TBD",
-    //         logo: "https://placehold.co/100x100?text=DPL"
-    //       },
-    //       teamB: {
-    //         name: "TBD",
-    //         logo: "https://placehold.co/100x100?text=DPL"
-    //       }
-    //     });
-    //   }
-    // });
+        // Assign teams based on completed match winners
+        if (matchType === "Qualifier 1") {
+          dummyMatch.teamA = matchWinners["Top Team"] || dummyMatch.teamA;
+          dummyMatch.teamB = matchWinners["Second Team"] || dummyMatch.teamB;
+        } else if (matchType === "Eliminator") {
+          dummyMatch.teamA = matchWinners["Third Team"] || dummyMatch.teamA;
+          dummyMatch.teamB = matchWinners["Fourth Team"] || dummyMatch.teamB;
+        } else if (matchType === "Qualifier 2") {
+          dummyMatch.teamA = matchWinners["Eliminator"] || dummyMatch.teamA;
+          dummyMatch.teamB = qualifier1Loser || dummyMatch.teamB;
+        } else if (matchType === "Final") {
+          dummyMatch.teamA = matchWinners["Qualifier 1"] || dummyMatch.teamA;
+          dummyMatch.teamB = matchWinners["Qualifier 2"] || dummyMatch.teamB;
+        }
+
+        formattedMatches.push(dummyMatch);
+      }
+    });
 
     res.status(200).json(formattedMatches);
   } catch (error) {
+    console.error("Error fetching upcoming matches:", error);
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
 
 exports.getCompletedMatches = async (req, res) => {
   try {
@@ -519,7 +619,7 @@ exports.getCompletedMatches = async (req, res) => {
       .populate("teamA", "name logo")
       .populate("teamB", "name logo")
       .sort({  date: -1,matchNumber: -1 })
-      .select("_id date teamA teamB teamAScore teamBScore matchNumber");
+      .select("_id date teamA teamB teamAScore teamBScore matchNumber matchType");
 
     if (limit) {
       query = query.limit(limit);  // Apply limit if specified
@@ -530,6 +630,7 @@ exports.getCompletedMatches = async (req, res) => {
     const formattedMatches = matches.map(match => ({
       matchId: match._id,
       matchNumber: match.matchNumber,
+      matchType: match.matchType,
       date: match.date,
       teamA: {
         name: match.teamA.name,
@@ -578,12 +679,13 @@ exports.getOngoingMatches = async (req, res) => {
     const matches = await Match.find({ status: "Ongoing" })
       .populate("teamA", "name logo")
       .populate("teamB", "name logo")
-      .select(" _id date teamA teamB teamAScore teamBScore matchNumber halfTime").limit(1);
+      .select(" _id date teamA teamB teamAScore teamBScore matchNumber halfTime matchType").limit(1);
 
     const formattedMatches = matches.map(match => ({
       matchId:match._id,
       date: match.date,
       matchNumber:match.matchNumber,
+      matchType: match.matchType,
       halfTime: match.halfTime,
       teamA: {
         name: match.teamA.name,
