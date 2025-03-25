@@ -514,7 +514,6 @@ exports.getUpcomingMatches = async (req, res) => {
   try {
     const limit = req.query.limit ? parseInt(req.query.limit) : null;
 
-    // Required match types in the playoff stage
     const playoffStages = ["Eliminator", "Qualifier 1", "Qualifier 2", "Final"];
 
     // Fetch all relevant matches (Completed, Ongoing, Upcoming)
@@ -525,14 +524,17 @@ exports.getUpcomingMatches = async (req, res) => {
 
     let matchWinners = {};
     let qualifier1Loser = null;
-    let completedMatches = new Set();
+    let existingMatches = new Set(); // Track matches that are either Completed or Ongoing
 
-    // Identify winners and track completed matches
+    // Identify winners, track existing (Completed/Ongoing) matches
     allMatches.forEach(match => {
+      if (match.status === "Completed" || match.status === "Ongoing") {
+        existingMatches.add(match.matchType); // Track any existing match
+      }
+
       if (match.status === "Completed") {
         const winner = match.teamAScore > match.teamBScore ? match.teamA : match.teamB;
         matchWinners[match.matchType] = winner;
-        completedMatches.add(match.matchType);
 
         if (match.matchType === "Qualifier 1") {
           qualifier1Loser = match.teamAScore > match.teamBScore ? match.teamB : match.teamA;
@@ -571,7 +573,12 @@ exports.getUpcomingMatches = async (req, res) => {
 
     // Determine missing upcoming playoff matches and assign teams dynamically
     playoffStages.forEach(matchType => {
-      if (!matches.some(m => m.matchType === matchType) && !completedMatches.has(matchType)) {
+      // ❌ If the match is already Completed or Ongoing, do not add a dummy match
+      if (existingMatches.has(matchType)) {
+        return;
+      }
+
+      if (!matches.some(m => m.matchType === matchType)) {
         let dummyMatch = {
           matchId: `dummy-${matchType.toLowerCase().replace(/\s+/g, "-")}`,
           matchType,
@@ -606,6 +613,7 @@ exports.getUpcomingMatches = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 
@@ -709,7 +717,7 @@ exports.getOngoingMatches = async (req, res) => {
 
 exports.createMatch = async (req, res) => {
   try {
-    const { teamA, teamB,matchNumber } = req.body;
+    const { teamA, teamB,matchNumber ,matchType,date} = req.body;
 
     // Fetch players from both teams
     const teamAPlayers = await Player.find({ team: teamA }).select("_id");
@@ -724,6 +732,8 @@ exports.createMatch = async (req, res) => {
 
     // Create new match with initialized playerStats
     const newMatch = new Match({
+      matchType,
+      date,
       matchNumber,
       teamA,
       teamB,

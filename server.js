@@ -1,5 +1,12 @@
 const express = require("express");
 const dotenv = require("dotenv");
+if (process.env.NODE_ENV==="development"){
+    const result = require("dotenv").config({path:".env.development"});
+    process.env = {
+        ...process.env,
+        ...result.parsed,
+    };
+}
 const cors = require("cors");
 const connectDB = require("./config/db");
 
