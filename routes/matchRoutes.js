@@ -1,5 +1,5 @@
 const express = require("express");
-const { getMatches, createMatch, updateMatch, addPoints, getUpcomingMatches, getPlayersOfMatch, addPointsToOnlyTeam, getMatchScores, getCompletedMatches, getOngoingMatches, getMatchStats, getMatchStatsLive, getMatchTotalPoints, getPointsTable, undoPlayerPoints, undoTeamPoints, setMatchCompleted, markMatchHalfTime, getHalfTimeStatus, setHalfTimeStatus, updateTeamMat } = require("../controllers/matchController");
+const { getMatches, createMatch, updateMatch, addPoints, getUpcomingMatches, getPlayersOfMatch, addPointsToOnlyTeam, getMatchScores, getCompletedMatches, getOngoingMatches, getMatchStats, getMatchStatsLive, getMatchTotalPoints, getPointsTable, undoPlayerPoints, undoTeamPoints, setMatchCompleted, markMatchHalfTime, getHalfTimeStatus, setHalfTimeStatus, updateTeamMat, getFinalMatchWinner } = require("../controllers/matchController");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
 
 const router = express.Router();
@@ -19,6 +19,7 @@ router.get("/matchscores/:matchId", getMatchScores);
 router.get("/matchstat/:matchId", getMatchStats);
 router.get("/matchstatlive/:matchId", getMatchStatsLive);
 router.get("/matchstattotal/:matchId", getMatchTotalPoints);
+router.get("/final", getFinalMatchWinner);
 router.get("/pointstable", getPointsTable);
 router.put("/:matchId/complete", setMatchCompleted);
 router.put("/:matchId/halftime", setHalfTimeStatus);

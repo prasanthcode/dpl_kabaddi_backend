@@ -4,13 +4,13 @@ const mongoose = require("mongoose");
 const redis = require("../config/redisConnect"); // Import Redis connection
 exports.getTopPlayers = async (req, res) => {
   try {
+
     // Check if data exists in Redis cache
     const cachedData = await redis.get("topPlayers");
     if (cachedData) {
-      return res.json(JSON.parse(cachedData)); // Return cached data
+      return res.json(JSON.parse(cachedData));
     }
 
-    // Fetch data from MongoDB
     const players = await Match.aggregate([
       { $unwind: "$playerStats" },
       {
@@ -23,18 +23,18 @@ exports.getTopPlayers = async (req, res) => {
               $cond: {
                 if: { $gte: [{ $sum: "$playerStats.defensePoints" }, 5] },
                 then: 1,
-                else: 0
-              }
-            }
+                else: 0,
+              },
+            },
           },
           super10s: {
             $sum: {
               $cond: {
                 if: { $gte: [{ $sum: "$playerStats.raidPoints" }, 10] },
                 then: 1,
-                else: 0
-              }
-            }
+                else: 0,
+              },
+            },
           },
           superRaids: {
             $sum: {
@@ -42,25 +42,25 @@ exports.getTopPlayers = async (req, res) => {
                 $filter: {
                   input: "$playerStats.raidPoints",
                   as: "raid",
-                  cond: { $gte: ["$$raid", 3] }
-                }
-              }
-            }
+                  cond: { $gte: ["$$raid", 3] },
+                },
+              },
+            },
           },
           totalPoints: {
             $sum: {
-              $add: [{ $sum: "$playerStats.raidPoints" }, { $sum: "$playerStats.defensePoints" }]
-            }
-          }
-        }
+              $add: [{ $sum: "$playerStats.raidPoints" }, { $sum: "$playerStats.defensePoints" }],
+            },
+          },
+        },
       },
       {
         $lookup: {
           from: "players",
           localField: "_id",
           foreignField: "_id",
-          as: "playerInfo"
-        }
+          as: "playerInfo",
+        },
       },
       { $unwind: "$playerInfo" },
       {
@@ -68,13 +68,13 @@ exports.getTopPlayers = async (req, res) => {
           from: "teams",
           localField: "playerInfo.team",
           foreignField: "_id",
-          as: "teamInfo"
-        }
+          as: "teamInfo",
+        },
       },
       { $unwind: "$teamInfo" },
       {
         $project: {
-          playerId: "$_id", // Include Player ID
+          playerId: "$_id",
           name: "$playerInfo.name",
           team: "$teamInfo.name",
           teamLogo: "$teamInfo.logo",
@@ -84,25 +84,45 @@ exports.getTopPlayers = async (req, res) => {
           high5s: 1,
           super10s: 1,
           superRaids: 1,
-          totalPoints: 1
-        }
-      }
+          totalPoints: 1,
+        },
+      },
     ]);
 
-    // Function to get top players sorted by points
+
+    // Function to rank players correctly (modified standard rank with skips)
     const getTopPlayers = (field, limit) => {
-      return players
-        .filter((p) => p[field] > 0) // Ensure non-zero players
-        .sort((a, b) => b[field] - a[field])
-        .slice(0, limit)
-        .map((p, index) => ({
-          playerId: p.playerId, // Include Player ID
-          name: p.name,
-          team: p.team,
-          profilePic: p.profilePic,
-          points: p[field],
-          teamLogo: index === 0 ? p.teamLogo : undefined
-        }));
+      const sorted = players
+        .filter((p) => p[field] > 0)
+        .sort((a, b) => b[field] - a[field]);
+
+      let rank = 1;
+      let prevPoints = null;
+      let currentRank = 1;
+      const rankedPlayers = [];
+
+      for (let i = 0; i < sorted.length && rankedPlayers.length < limit; i++) {
+        if (sorted[i][field] !== prevPoints) {
+          rank = currentRank;
+        }
+
+        rankedPlayers.push({
+          rank,
+          playerId: sorted[i].playerId,
+          name: sorted[i].name,
+          team: sorted[i].team,
+          profilePic: sorted[i].profilePic,
+          points: sorted[i][field],
+          teamLogo: rank === 1 ? sorted[i].teamLogo : undefined,
+        });
+
+        if (sorted[i][field] !== prevPoints) {
+          currentRank = rank + 1; // Increment based on the assigned rank
+        }
+        prevPoints = sorted[i][field];
+      }
+
+      return rankedPlayers;
     };
 
     // Final result object
@@ -112,11 +132,11 @@ exports.getTopPlayers = async (req, res) => {
       top10SuperRaids: getTopPlayers("superRaids", 10),
       top10RaidPoints: getTopPlayers("totalRaidPoints", 10),
       top10Tackles: getTopPlayers("totalDefensePoints", 10),
-      top10TotalPoints: getTopPlayers("totalPoints", 10)
+      top10TotalPoints: getTopPlayers("totalPoints", 10),
     };
 
     // Store data in Redis cache for 10 minutes (600 seconds)
-    await redis.set("topPlayers", JSON.stringify(result), "EX", 600);
+    await redis.set("topPlayers", JSON.stringify(result), "EX", 1200);
 
     res.json(result);
   } catch (error) {

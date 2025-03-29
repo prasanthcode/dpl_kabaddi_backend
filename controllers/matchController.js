@@ -12,6 +12,43 @@ exports.getMatches = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
+
+exports.getFinalMatchWinner = async (req, res) => {
+  try {
+    const finalMatches = await Match.find({ matchType: "Final", status: "Completed" }).populate("teamA teamB");
+    
+    if (!finalMatches.length) {
+      return res.status(404).json({ message: "No completed final matches found" });
+    }
+    
+    const winners = finalMatches.map(match => {
+      let winner;
+      if (match.teamAScore > match.teamBScore) {
+        winner = match.teamA;
+      } else if (match.teamBScore > match.teamAScore) {
+        winner = match.teamB;
+      } else {
+        return { matchId: match._id, message: "The match ended in a draw" };
+      }
+      
+      return {
+        matchId: match._id,
+        name: winner.name,
+        logo: winner.logo,
+      };
+    });
+    
+    return res.status(200).json(winners);
+  } catch (error) {
+    console.error("Error getting match winners:", error.message);
+    return res.status(500).json({ error: error.message });
+  }
+};
+
+
+
 exports.setMatchCompleted = async (req, res) => {
   try {
     const { matchId } = req.params;
@@ -25,6 +62,14 @@ exports.setMatchCompleted = async (req, res) => {
     if (!updatedMatch) {
       return res.status(404).json({ message: "Match not found" });
     }
+
+    // Invalidate all cached completed matches
+    const cacheKeys = await redis.keys("completedMatches*");
+    if (cacheKeys.length > 0) {
+      await redis.del(...cacheKeys);
+      console.log("Invalidated Redis cache:", cacheKeys);
+    }
+
     res.json(updatedMatch);
   } catch (error) {
     console.error("Error updating match:", error);
@@ -154,12 +199,21 @@ exports.getHalfTimeStatus = async (req, res) => {
   }
 };
 
+
 exports.getPointsTable = async (req, res) => {
   try {
+    const cacheKey = "pointsTable"; // Cache key for Redis
+
+    // Check Redis for cached data
+    const cachedData = await redis.get(cacheKey);
+    if (cachedData) {
+      return res.json(JSON.parse(cachedData)); // Return cached response
+    }
+
     // Fetch all teams
     const allTeams = await Team.find({}, "name");
 
-    // Initialize points table with all teams
+    // Initialize points table
     const pointsTable = {};
     allTeams.forEach((team) => {
       pointsTable[team._id] = {
@@ -170,19 +224,16 @@ exports.getPointsTable = async (req, res) => {
         ties: 0,
         matchesPlayed: 0,
         pointsDifference: 0,
-        points: 0
+        points: 0,
       };
     });
 
     // Fetch completed matches
-    // const matches = await Match.find({ status: "Completed" }).populate("teamA teamB", "name");
     const matches = await Match.find({
       status: "Completed",
-      $or: [
-        { matchType: { $exists: false } }, // matchType not present
-      ]
+      $or: [{ matchType: { $exists: false } }], // matchType not present
     }).populate("teamA teamB", "name");
-    
+
     // Process completed matches
     matches.forEach((match) => {
       const { teamA, teamB, teamAScore, teamBScore } = match;
@@ -210,16 +261,20 @@ exports.getPointsTable = async (req, res) => {
 
     // Sort teams based on points, wins, and points difference
     const sortedPointsTable = Object.values(pointsTable).sort((a, b) => {
-      if (b.points !== a.points) return b.points - a.points; // Sort by points
-      if (b.wins !== a.wins) return b.wins - a.wins; // Sort by wins
-      return b.pointsDifference - a.pointsDifference; // Sort by points difference
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      return b.pointsDifference - a.pointsDifference;
     });
+
+    // Store sorted points table in Redis with a 30-second expiration time
+    await redis.set(cacheKey, JSON.stringify(sortedPointsTable), "EX", 3600);
 
     res.json(sortedPointsTable);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 };
+
 
 
 exports.getMatchTotalPoints = async (req, res) => {
@@ -356,6 +411,7 @@ exports.getMatchScores = async (req, res) => {
         matCount: match.teamBMat, // Add teamBMat
       },
       halfTime:match.halfTime,
+      status:match.status,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -615,27 +671,33 @@ exports.getUpcomingMatches = async (req, res) => {
 };
 
 
-
-
-
 exports.getCompletedMatches = async (req, res) => {
   try {
-    let { limit } = req.query;  // Get the limit from query params
-    limit = limit ? parseInt(limit) : null;  // Convert to integer if present
+    let { limit } = req.query;
+    limit = limit ? parseInt(limit) : null;
+    const cacheKey = limit ? `completedMatches:${limit}` : "completedMatches"; // Unique key per limit
 
+    // Check Redis cache
+    const cachedData = await redis.get(cacheKey);
+    if (cachedData) {
+      return res.status(200).json(JSON.parse(cachedData)); // Return cached response
+    }
+
+    // Fetch completed matches from DB
     let query = Match.find({ status: "Completed" })
       .populate("teamA", "name logo")
       .populate("teamB", "name logo")
-      .sort({  date: -1,matchNumber: -1 })
+      .sort({ date: -1, matchNumber: -1 })
       .select("_id date teamA teamB teamAScore teamBScore matchNumber matchType");
 
     if (limit) {
-      query = query.limit(limit);  // Apply limit if specified
+      query = query.limit(limit);
     }
 
     const matches = await query;
 
-    const formattedMatches = matches.map(match => ({
+    // Format the response
+    const formattedMatches = matches.map((match) => ({
       matchId: match._id,
       matchNumber: match.matchNumber,
       matchType: match.matchType,
@@ -649,14 +711,18 @@ exports.getCompletedMatches = async (req, res) => {
         name: match.teamB.name,
         logo: match.teamB.logo,
         score: match.teamBScore,
-      }
+      },
     }));
+
+    // Store in Redis for 1 minute (60 seconds)
+    await redis.set(cacheKey, JSON.stringify(formattedMatches), "EX", 60);
 
     res.status(200).json(formattedMatches);
   } catch (error) {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // @desc Create a new match
 exports.updateTeamMat = async (req, res) => {
