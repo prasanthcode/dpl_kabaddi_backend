@@ -1,92 +1,47 @@
-const redis = require("../config/redisConnect");
-const Team = require("../models/Team");
+const asyncHandler = require("express-async-handler");
+const {
+  getTeams,
+  deleteTeam,
+  createTeam,
+  updateTeam,
+  getTeamById,
+} = require("../services/teamService");
 
-// // @desc Get all teams
-// exports.getTeamInfo = async (req, res) => {
-//   try {
-//     const { id } = req.params; // Extract team ID from request params
+exports.getTeams = asyncHandler(async (req, res) => {
+  const teams = await getTeams();
+  res.status(200).json(teams);
+});
+exports.getTeamById = asyncHandler(async (req, res) => {
 
-//     const team = await Team.findById(id)
-//       .populate("players") // Fetch only name and profilePic for players
-//       .select("_id name logo players"); // Fetch only required team fields
+  const { teamId } = req.params;
+  const team = await getTeamById(teamId);
+  res.status(200).json(team);
 
-//     if (!team) {
-//       return res.status(404).json({ message: "team Not found" });
-//     }
+ });
+exports.createTeam = asyncHandler(async (req, res) => {
+  const { name } = req.body;
+  const logoFile = req.file; 
 
-//     res.status(200).json(team);
-//   } catch (error) {
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
-// get team without cache
-// exports.getTeams = async (req, res) => {
-//   try {
-//     const teams = await Team.find({},"_id name logo");
-//     res.status(200).json(teams);
-//   } catch (error) {
-//     res.status(500).json({ message: "Server error" });
-//   }
-// };
+  const newTeam = await createTeam({ name, logoFile });
 
-exports.getTeams = async (req, res) => {
-  try {
-    const cacheKey = "teams_data";
-
-    // Check if data exists in Redis
-    const cachedData = await redis.get(cacheKey);
-    if (cachedData) {
-      return res.status(200).json(JSON.parse(cachedData)); // Return cached response
-    }
-
-    // Fetch from MongoDB, sorted alphabetically by name
-    const teams = await Team.find({}, "_id name logo").sort({ name: 1 });
-
-    // Store in Redis with an expiration time (e.g., 1 hour = 3600 seconds)
-    await redis.set(cacheKey, JSON.stringify(teams), "EX", 3600);
-
-    res.status(200).json(teams);
-  } catch (error) {
-    res.status(500).json({ message: "Server error" });
-  }
-};
+  res.status(201).json(newTeam);
+});
 
 
-// @desc Create a new team
-// exports.createTeam = async (req, res) => {
-//   try {
-//     const { name, logo } = req.body;
-//     const newTeam = new Team({ name, logo });
-//     await newTeam.save();
-//     res.status(201).json(newTeam);
-//   } catch (error) {
-//     res.status(400).json({ message: "Invalid data" });
-//   }
-// };
+exports.deleteTeam = asyncHandler(async (req, res) => {
+  const { id } = req.params;
 
-exports.createTeam = async (req, res) => {
-  try {
-    const { name, logo } = req.body;
+  const result = await deleteTeam(id);
 
-    // Create and save the new team
-    const newTeam = new Team({ name, logo });
-    await newTeam.save();
+  res.status(200).json(result);
+});
 
-    // Clear the cached teams list to force fresh fetch
-    await redis.del("teams_data");
-
-    res.status(201).json(newTeam);
-  } catch (error) {
-    res.status(400).json({ message: "Invalid data" });
-  }
-};
-
-// @desc Delete a team by ID
-exports.deleteTeam = async (req, res) => {
-  try {
-    await Team.findByIdAndDelete(req.params.id);
-    res.status(200).json({ message: "Team removed" });
-  } catch (error) {
-    res.status(404).json({ message: "Team not found" });
-  }
-};
+exports.updateTeam = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const updateData = {
+    name: req.body.name,
+    logoFile: req.file, 
+  };
+  const updatedTeam = await updateTeam(id, updateData);
+  res.status(200).json(updatedTeam);
+});
