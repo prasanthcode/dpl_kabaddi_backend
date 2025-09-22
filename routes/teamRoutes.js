@@ -1,10 +1,18 @@
 const express = require("express");
-const { getTeams, createTeam, deleteTeam, getTeamInfo } = require("../controllers/teamController");
-
+const multer = require("multer");
+const upload = multer({ dest: "tmp/" });
+const {
+  getTeams,
+  createTeam,
+  deleteTeam,
+  updateTeam,
+  getTeamById,
+} = require("../controllers/teamController");
 const router = express.Router();
 
 router.get("/", getTeams);
-router.post("/", createTeam);
+router.get("/:teamId", getTeamById);
+router.post("/", upload.single("logo"), createTeam);
 router.delete("/:id", deleteTeam);
-
+router.patch("/:id", upload.single("logo"), updateTeam);
 module.exports = router;
