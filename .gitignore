@@ -2,3 +2,10 @@
 .env
 .env.development
 test.txt
+/tmp/
+swagger-output.json
+test.js
+.prettierrc.json
+eslint.config.mjs
+migratePlayerStats.js
+swagger.js
