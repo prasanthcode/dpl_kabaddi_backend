@@ -7,10 +7,12 @@ const {
   deleteTeam,
   updateTeam,
   getTeamById,
+  teamStats,
 } = require("../controllers/teamController");
 const router = express.Router();
 
 router.get("/", getTeams);
+router.get("/:id/stats", teamStats);
 router.get("/:teamId", getTeamById);
 router.post("/", upload.single("logo"), createTeam);
 router.delete("/:id", deleteTeam);

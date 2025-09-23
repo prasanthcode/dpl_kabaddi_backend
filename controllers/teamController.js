@@ -5,6 +5,7 @@ const {
   createTeam,
   updateTeam,
   getTeamById,
+  teamStats,
 } = require("../services/teamService");
 
 exports.getTeams = asyncHandler(async (req, res) => {
@@ -12,21 +13,18 @@ exports.getTeams = asyncHandler(async (req, res) => {
   res.status(200).json(teams);
 });
 exports.getTeamById = asyncHandler(async (req, res) => {
-
   const { teamId } = req.params;
   const team = await getTeamById(teamId);
   res.status(200).json(team);
-
- });
+});
 exports.createTeam = asyncHandler(async (req, res) => {
   const { name } = req.body;
-  const logoFile = req.file; 
+  const logoFile = req.file;
 
   const newTeam = await createTeam({ name, logoFile });
 
   res.status(201).json(newTeam);
 });
-
 
 exports.deleteTeam = asyncHandler(async (req, res) => {
   const { id } = req.params;
@@ -40,8 +38,13 @@ exports.updateTeam = asyncHandler(async (req, res) => {
   const { id } = req.params;
   const updateData = {
     name: req.body.name,
-    logoFile: req.file, 
+    logoFile: req.file,
   };
   const updatedTeam = await updateTeam(id, updateData);
   res.status(200).json(updatedTeam);
+});
+exports.teamStats = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const stats = await teamStats(id);
+  res.status(200).json(stats);
 });
