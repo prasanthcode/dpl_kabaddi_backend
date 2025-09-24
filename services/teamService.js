@@ -6,7 +6,6 @@ const {
   uploadImageFromFile,
   deleteImageByUrl,
 } = require("./imageService");
-const { getPointsTable } = require("./statsService");
 
 async function getTeams() {
   const teams = await Team.find({}, "_id name logo").sort({ name: 1 });
@@ -138,10 +137,6 @@ async function teamStats(teamId) {
     }
   }
 
-  const pointsTable = await getPointsTable();
-  const rank =
-    pointsTable.findIndex((t) => t.teamId.toString() === teamId.toString()) + 1;
-
   return {
     teamId,
     teamName: team.name,
@@ -150,7 +145,6 @@ async function teamStats(teamId) {
     wins,
     losses,
     ties,
-    rank,
     highestScore,
     highestWinMargin,
     highestMarginWinMatch,
