@@ -61,7 +61,7 @@ async function login({ email, password }) {
   };
 }
 
-async function refreshToken(token) {
+async function refreshTokenService(token) {
   try {
     const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
     const user = await User.findById(decoded.id);
@@ -75,7 +75,7 @@ async function refreshToken(token) {
 }
 
 module.exports = {
-  refreshToken,
+  refreshTokenService,
   register,
   login,
   getProfile,

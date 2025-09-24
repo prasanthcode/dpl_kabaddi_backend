@@ -1,5 +1,5 @@
 const asyncHandler = require("express-async-handler");
-const { register, login, getProfile } = require("../services/authService");
+const { register, login, getProfile ,refreshTokenService } = require("../services/authService");
 
 exports.register = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
@@ -23,6 +23,6 @@ exports.refreshToken = asyncHandler(async (req, res) => {
   if (!refreshToken) {
     return res.status(400).json({ message: "Refresh token required" });
   }
-  const result = await refreshToken(refreshToken);
+  const result = await refreshTokenService(refreshToken);
   res.status(200).json(result);
 });
