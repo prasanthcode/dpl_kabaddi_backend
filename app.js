@@ -14,7 +14,6 @@ app.use(express.json({ limit: "1mb" }));
 app.use("/api/teams", require("./routes/teamRoutes"));
 app.use("/api/players", require("./routes/playerRoutes"));
 app.use("/api/matches", require("./routes/matchRoutes"));
-app.use("/api/upload", require("./routes/uploadRoutes"));
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/stats", require("./routes/statsRoutes"));
 app.use("/api/points", require("./routes/pointsRoutes"));
