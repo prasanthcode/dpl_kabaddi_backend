@@ -1,5 +1,7 @@
+const ErrorResponse = require("../utils/errorResponse");
+
 const notFound = (req, res, next) => {
-  const error = new Error(`Not Found - ${req.originalUrl}`);
+  const error = new ErrorResponse(`Not Found - ${req.originalUrl}`, 404);
   error.statusCode = 404;
   next(error);
 };
