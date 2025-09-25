@@ -1,7 +1,7 @@
 const express = require("express");
-const { getTopPlayers } = require("../controllers/statsController");
+const { getTopPlayers, getTopTeams } = require("../controllers/statsController");
 
 const router = express.Router();
-router.get("/top5", getTopPlayers);
-
+router.get("/top-players", getTopPlayers);
+router.get("/top-teams",getTopTeams);
 module.exports = router;

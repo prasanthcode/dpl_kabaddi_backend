@@ -7,6 +7,7 @@ const {
   getPointsTable,
   getFinalMatchWinners,
   getFullMatchStats,
+  getTopTeamsService,
 } = require("../services/statsService");
 exports.getTopPlayers = asyncHandler(async (req, res) => {
   const { category } = req.query;
@@ -31,6 +32,35 @@ exports.getTopPlayers = asyncHandler(async (req, res) => {
   res.json(topPlayers);
 });
 
+exports.getTopTeams = asyncHandler(async (req, res) => {
+  const { category } = req.query;
+
+  const allowedCategories = [
+    "totalPoints",
+    "totalRaids",
+    "totalDefense",
+    "super10s",
+    "high5s",
+    "superRaids",
+    "avgTotalPoints",
+    "avgRaids",
+    "avgDefense",
+  ];
+
+  // Validate category
+  if (category && !allowedCategories.includes(category)) {
+    return res.status(400).json({
+      success: false,
+      error: "Invalid category",
+      allowedCategories,
+    });
+  }
+
+  // Fetch leaderboard
+  const topTeams = await getTopTeamsService(category);
+
+  res.status(200).json(topTeams);
+});
 exports.getPointsTable = asyncHandler(async (req, res) => {
   const table = await getPointsTable();
   res.status(200).json(table);

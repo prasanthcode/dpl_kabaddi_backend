@@ -515,7 +515,7 @@ async function getFullMatchStats(matchId) {
 
     if (totalRaidPoints >= 1) {
       stats[teamKey].topRaiders.push({
-        id: player._id,
+        id: player._id.toString(),
         name: player.name,
         profilePic: getPublicIdFromUrl(player.profilePic),
         totalRaidPoints,
@@ -523,7 +523,7 @@ async function getFullMatchStats(matchId) {
     }
     if (totalDefensePoints >= 1) {
       stats[teamKey].topDefenders.push({
-        id: player._id,
+        id: player._id.toString(),
         name: player.name,
         profilePic: getPublicIdFromUrl(player.profilePic),
         totalDefensePoints,
@@ -542,6 +542,175 @@ async function getFullMatchStats(matchId) {
   return stats;
 }
 
+async function getRankedTeams(statField = null, limit = 10) {
+  // Define all possible stats
+  const allStats = [
+    "totalPoints",
+    "totalRaids",
+    "totalDefense",
+    "super10s",
+    "high5s",
+    "superRaids",
+    "avgTotalPoints",
+    "avgRaids",
+    "avgDefense",
+  ];
+
+  // If statField is null or invalid, show all stats
+  const showAll = !statField || !allStats.includes(statField);
+
+  // Build $project dynamically
+  const projectStage = {
+    _id: 0,
+    name: 1,
+    logo: 1,
+  };
+
+  if (showAll) {
+    allStats.forEach((s) => (projectStage[s] = 1));
+  } else {
+    projectStage[statField] = 1;
+  }
+
+  const pipeline = [
+    {
+      $lookup: {
+        from: "matches",
+        let: { teamId: "$_id" },
+        pipeline: [
+          { $match: { status: "Completed" } },
+          {
+            $match: {
+              $expr: {
+                $or: [
+                  { $eq: ["$teamA", "$$teamId"] },
+                  { $eq: ["$teamB", "$$teamId"] },
+                ],
+              },
+            },
+          },
+          {
+            $project: {
+              raidPoints: {
+                $sum: {
+                  $map: {
+                    input: "$playerStats",
+                    as: "p",
+                    in: { $sum: "$$p.raidPoints" },
+                  },
+                },
+              },
+              defensePoints: {
+                $sum: {
+                  $map: {
+                    input: "$playerStats",
+                    as: "p",
+                    in: { $sum: "$$p.defensePoints" },
+                  },
+                },
+              },
+              // Player-level Super 10s
+              super10s: {
+                $size: {
+                  $filter: {
+                    input: "$playerStats",
+                    as: "p",
+                    cond: { $gte: [{ $sum: "$$p.raidPoints" }, 10] },
+                  },
+                },
+              },
+              // Player-level High 5s
+              high5s: {
+                $size: {
+                  $filter: {
+                    input: "$playerStats",
+                    as: "p",
+                    cond: { $gte: [{ $sum: "$$p.defensePoints" }, 5] },
+                  },
+                },
+              },
+              // Super Raids (raids with >= 3 points)
+              superRaids: {
+                $sum: {
+                  $map: {
+                    input: "$playerStats",
+                    as: "p",
+                    in: {
+                      $size: {
+                        $filter: {
+                          input: "$$p.raidPoints",
+                          as: "r",
+                          cond: { $gte: ["$$r", 3] },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        ],
+        as: "matches",
+      },
+    },
+    {
+      $addFields: {
+        matchesPlayed: { $size: "$matches" },
+        totalRaids: { $sum: "$matches.raidPoints" },
+        totalDefense: { $sum: "$matches.defensePoints" },
+        totalPoints: {
+          $sum: {
+            $map: {
+              input: "$matches",
+              as: "m",
+              in: { $add: ["$$m.raidPoints", "$$m.defensePoints"] },
+            },
+          },
+        },
+        // Sum across all matches
+        super10s: { $sum: "$matches.super10s" },
+        high5s: { $sum: "$matches.high5s" },
+        superRaids: { $sum: "$matches.superRaids" },
+      },
+    },
+    {
+      $addFields: {
+        avgRaids: {
+          $cond: [
+            { $eq: ["$matchesPlayed", 0] },
+            0,
+            { $divide: ["$totalRaids", "$matchesPlayed"] },
+          ],
+        },
+        avgDefense: {
+          $cond: [
+            { $eq: ["$matchesPlayed", 0] },
+            0,
+            { $divide: ["$totalDefense", "$matchesPlayed"] },
+          ],
+        },
+        avgTotalPoints: {
+          $cond: [
+            { $eq: ["$matchesPlayed", 0] },
+            0,
+            { $divide: ["$totalPoints", "$matchesPlayed"] },
+          ],
+        },
+      },
+    },
+    { $sort: { [statField || "totalPoints"]: -1 } },
+    { $limit: limit },
+    { $project: projectStage },
+  ];
+
+  return Team.aggregate(pipeline);
+}
+
+async function getTopTeamsService(category = null) {
+  const data = await getRankedTeams(category, 5);
+  return data;
+}
+
 module.exports = {
   getMatchStats,
   getMatchStatsByTeam,
@@ -550,4 +719,5 @@ module.exports = {
   getFinalMatchWinners,
   getTopPlayersService,
   getFullMatchStats,
+  getTopTeamsService,
 };
