@@ -11,8 +11,14 @@ const {
   setProfilePic,
   getPlayerById,
   updatePlayer,
+  getPlayerPoints,
 } = require("../services/playerService");
-
+exports.getPlayerPointsOfMatch = asyncHandler(async (req, res) => {
+  const { matchId, playerId } = req.params;
+  const { type = "raid" } = req.query;
+  const points = await getPlayerPoints(matchId, playerId, type);
+  res.status(200).json({ playerId, type, points });
+});
 exports.getPlayersOfMatch = asyncHandler(async (req, res) => {
   const { matchId } = req.params;
   const players = await getPlayersOfMatch(matchId);

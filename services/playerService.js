@@ -1,6 +1,7 @@
 const Match = require("../models/Match");
 const Player = require("../models/Player");
 const Team = require("../models/Team");
+const ErrorResponse = require("../utils/errorResponse");
 const {
   replaceImage,
   uploadImageFromFile,
@@ -238,7 +239,22 @@ async function getPlayerNameById(playerId) {
     return null;
   }
 }
+async function getPlayerPoints(matchId, playerId, type = "raid") {
+  if (!["raid", "defense"].includes(type)) {
+    throw new ErrorResponse("Type must be 'raid' or 'defense'", 400);
+  }
 
+  const match = await Match.findById(matchId).populate("playerStats.player");
+  if (!match) throw new ErrorResponse("Match not found", 404);
+
+  const playerStat = match.playerStats.find(
+    (ps) => ps.player._id.toString() === playerId
+  );
+
+  if (!playerStat) return [];
+
+  return type === "raid" ? playerStat.raidPoints : playerStat.defensePoints;
+}
 module.exports = {
   getPlayersOfMatch,
   getPlayers,
@@ -251,4 +267,5 @@ module.exports = {
   getPlayerById,
   updatePlayer,
   getPlayerNameById,
+  getPlayerPoints,
 };

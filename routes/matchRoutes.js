@@ -25,7 +25,7 @@ const {
   getFullMatchStats,
 } = require("../controllers/statsController");
 
-const { getPlayersOfMatch } = require("../controllers/playerController");
+const { getPlayersOfMatch, getPlayerPointsOfMatch } = require("../controllers/playerController");
 const { getActiveConnections } = require("../controllers/firebaseController");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
 
@@ -45,6 +45,7 @@ router.get("/:matchId/stats/live", getMatchStatsLive);
 router.get("/:matchId/stats/total", getMatchTotalPoints);
 router.get("/:matchId/stats", getMatchStats);
 router.get("/:matchId/fullstats", getFullMatchStats);
+router.get("/:matchId/player/:playerId/sequence",getPlayerPointsOfMatch)
 router.use(protect, adminOnly);
 router.post("/", createMatch);
 router.patch("/:id", updateMatch);

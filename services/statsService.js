@@ -462,7 +462,7 @@ async function getFullMatchStats(matchId) {
     .populate("teamA teamB")
     .populate({
       path: "playerStats.player",
-      select: "name team profilePic",
+      select: "name team profilePic _id",
       populate: { path: "team", select: "name" },
     });
 
@@ -513,9 +513,9 @@ async function getFullMatchStats(matchId) {
     stats[teamKey].totalRaidPoints += totalRaidPoints;
     stats[teamKey].totalDefensePoints += totalDefensePoints;
 
-    // Only push players with >1 raid/defense point
     if (totalRaidPoints >= 1) {
       stats[teamKey].topRaiders.push({
+        id: player._id,
         name: player.name,
         profilePic: getPublicIdFromUrl(player.profilePic),
         totalRaidPoints,
@@ -523,6 +523,7 @@ async function getFullMatchStats(matchId) {
     }
     if (totalDefensePoints >= 1) {
       stats[teamKey].topDefenders.push({
+        id: player._id,
         name: player.name,
         profilePic: getPublicIdFromUrl(player.profilePic),
         totalDefensePoints,
@@ -530,7 +531,6 @@ async function getFullMatchStats(matchId) {
     }
   });
 
-  // Sort raiders/defenders
   stats.teamA.topRaiders.sort((a, b) => b.totalRaidPoints - a.totalRaidPoints);
   stats.teamB.topRaiders.sort((a, b) => b.totalRaidPoints - a.totalRaidPoints);
   stats.teamA.topDefenders.sort(
