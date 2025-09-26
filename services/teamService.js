@@ -1,3 +1,4 @@
+const { default: mongoose } = require("mongoose");
 const Match = require("../models/Match");
 const Player = require("../models/Player");
 const Team = require("../models/Team");
@@ -83,28 +84,119 @@ async function getTeamNameById(teamId) {
 }
 
 async function teamStats(teamId) {
-  const team = await Team.findById(teamId);
+  const team = await Team.findById(teamId, "name logo");
   if (!team) throw new Error("Team not found");
 
-  const matches = await Match.find({
-    status: "Completed",
-    $or: [{ teamA: teamId }, { teamB: teamId }],
-  }).populate("teamA teamB", "name logo");
+  const teamObjectId = new mongoose.Types.ObjectId(teamId);
 
+  // Aggregate matches
+  const matches = await Match.aggregate([
+    {
+      $match: {
+        status: "Completed",
+        $or: [{ teamA: teamObjectId }, { teamB: teamObjectId }],
+      },
+    },
+
+    // Populate teamA and teamB
+    {
+      $lookup: {
+        from: "teams",
+        localField: "teamA",
+        foreignField: "_id",
+        as: "teamAData",
+      },
+    },
+    { $unwind: "$teamAData" },
+    {
+      $lookup: {
+        from: "teams",
+        localField: "teamB",
+        foreignField: "_id",
+        as: "teamBData",
+      },
+    },
+    { $unwind: "$teamBData" },
+
+    // Unwind playerStats
+    { $unwind: { path: "$playerStats", preserveNullAndEmptyArrays: true } },
+
+    // Lookup player to get their team
+    {
+      $lookup: {
+        from: "players",
+        localField: "playerStats.player",
+        foreignField: "_id",
+        as: "playerDoc",
+      },
+    },
+    { $unwind: { path: "$playerDoc", preserveNullAndEmptyArrays: true } },
+
+    // Compute raid and tackle points only for players in the given team
+    {
+      $addFields: {
+        raidPointsForTeam: {
+          $cond: [
+            { $eq: ["$playerDoc.team", teamObjectId] },
+            { $sum: "$playerStats.raidPoints" },
+            0,
+          ],
+        },
+        tacklePointsForTeam: {
+          $cond: [
+            { $eq: ["$playerDoc.team", teamObjectId] },
+            { $sum: "$playerStats.defensePoints" },
+            0,
+          ],
+        },
+        teamScore: {
+          $cond: [
+            { $eq: ["$teamA", teamObjectId] },
+            "$teamAScore",
+            "$teamBScore",
+          ],
+        },
+        opponentScore: {
+          $cond: [
+            { $eq: ["$teamA", teamObjectId] },
+            "$teamBScore",
+            "$teamAScore",
+          ],
+        },
+        teamA: "$teamAData",
+        teamB: "$teamBData",
+      },
+    },
+
+    // Group back by match to sum player points
+    {
+      $group: {
+        _id: "$_id",
+        teamScore: { $first: "$teamScore" },
+        opponentScore: { $first: "$opponentScore" },
+        teamA: { $first: "$teamA" },
+        teamB: { $first: "$teamB" },
+        teamAScore: { $first: "$teamAScore" },
+        teamBScore: { $first: "$teamBScore" },
+        totalRaidPoints: { $sum: "$raidPointsForTeam" },
+        totalTacklePoints: { $sum: "$tacklePointsForTeam" },
+      },
+    },
+  ]);
+
+  // Compute overall stats
   let wins = 0,
     losses = 0,
     ties = 0,
-    matchesPlayed = matches.length,
     highestScore = 0,
     highestWinMargin = 0,
     highestMarginWinMatch = null,
     totalRaidPoints = 0,
-    totalTacklePoints = 0;
+    totalTacklePoints = 0,
+    matchesPlayed = matches.length;
 
   for (const match of matches) {
-    const isTeamA = match.teamA._id.equals(teamId);
-    const teamScore = isTeamA ? match.teamAScore : match.teamBScore;
-    const opponentScore = isTeamA ? match.teamBScore : match.teamAScore;
+    const { teamScore, opponentScore } = match;
 
     if (teamScore > opponentScore) {
       wins++;
@@ -126,19 +218,12 @@ async function teamStats(teamId) {
 
     if (teamScore > highestScore) highestScore = teamScore;
 
-    for (const ps of match.playerStats) {
-      if (ps.player) {
-        const playerDoc = await Player.findById(ps.player, "team");
-        if (playerDoc && playerDoc.team.equals(teamId)) {
-          totalRaidPoints += ps.raidPoints.reduce((a, b) => a + b, 0);
-          totalTacklePoints += ps.defensePoints.reduce((a, b) => a + b, 0);
-        }
-      }
-    }
+    totalRaidPoints += match.totalRaidPoints || 0;
+    totalTacklePoints += match.totalTacklePoints || 0;
   }
 
   return {
-    teamId,
+    teamId: teamId.toString(),
     teamName: team.name,
     teamLogo: team.logo,
     matchesPlayed,
