@@ -1,3 +1,4 @@
+const { default: mongoose } = require("mongoose");
 const Match = require("../models/Match");
 const Player = require("../models/Player");
 const Team = require("../models/Team");
@@ -101,76 +102,120 @@ async function updatePlayer(playerId, updateData) {
 }
 
 async function getPlayerDetails(playerId) {
-  const player = await Player.findById(playerId).populate("team");
+  const player = await Player.findById(playerId).populate("team", "name logo");
   if (!player) throw new Error("Player not found");
 
-  const matches = await Match.find({
-    "playerStats.player": playerId,
-    status: "Completed",
-  })
-    .populate("teamA teamB")
-    .lean();
+  const playerObjectId = new mongoose.Types.ObjectId(playerId);
 
-  let matchStats = [];
-  let totalRaidPoints = 0,
-    totalDefensePoints = 0,
-    totalPoints = 0,
-    totalSuper10s = 0,
-    totalHigh5s = 0,
-    totalSuperRaids = 0;
+  // Aggregate match stats for this player
+  const matches = await Match.aggregate([
+    { $match: { status: "Completed", "playerStats.player": playerObjectId } },
 
-  matches.forEach((match) => {
-    const playerStats = match.playerStats.find(
-      (p) => p.player.toString() === playerId
-    );
-    if (!playerStats) return;
+    // Populate teamA and teamB
+    {
+      $lookup: {
+        from: "teams",
+        localField: "teamA",
+        foreignField: "_id",
+        as: "teamAData",
+      },
+    },
+    { $unwind: "$teamAData" },
+    {
+      $lookup: {
+        from: "teams",
+        localField: "teamB",
+        foreignField: "_id",
+        as: "teamBData",
+      },
+    },
+    { $unwind: "$teamBData" },
 
-    const raidPoints = playerStats.raidPoints.reduce((a, b) => a + b, 0);
-    const defensePoints = playerStats.defensePoints.reduce((a, b) => a + b, 0);
-    const matchTotalPoints = raidPoints + defensePoints;
+    // Unwind playerStats for this player
+    { $unwind: "$playerStats" },
+    { $match: { "playerStats.player": playerObjectId } },
 
-    const super10 = raidPoints >= 10 ? 1 : 0;
-    const high5 = defensePoints >= 5 ? 1 : 0;
-    const superRaids = playerStats.raidPoints.filter((rp) => rp >= 3).length;
+    // Compute per-match stats
+    {
+      $addFields: {
+        raidPoints: { $sum: "$playerStats.raidPoints" },
+        defensePoints: { $sum: "$playerStats.defensePoints" },
+        totalPoints: {
+          $sum: {
+            $sum: ["$playerStats.raidPoints", "$playerStats.defensePoints"],
+          },
+        },
+        super10: {
+          $cond: [{ $gte: [{ $sum: "$playerStats.raidPoints" }, 10] }, 1, 0],
+        },
+        high5: {
+          $cond: [{ $gte: [{ $sum: "$playerStats.defensePoints" }, 5] }, 1, 0],
+        },
+        superRaids: {
+          $size: {
+            $filter: {
+              input: "$playerStats.raidPoints",
+              as: "rp",
+              cond: { $gte: ["$$rp", 3] },
+            },
+          },
+        },
+        opponentTeam: {
+          $cond: [
+            { $eq: ["$teamA", player.team._id] },
+            "$teamBData",
+            "$teamAData",
+          ],
+        },
+      },
+    },
 
-    totalRaidPoints += raidPoints;
-    totalDefensePoints += defensePoints;
-    totalPoints += matchTotalPoints;
-    totalSuper10s += super10;
-    totalHigh5s += high5;
-    totalSuperRaids += superRaids;
+    // Project the final fields
+    {
+      $project: {
+        matchId: "$_id",
+        raidPoints: 1,
+        defensePoints: 1,
+        totalPoints: 1,
+        super10: 1,
+        high5: 1,
+        superRaids: 1,
+        opponentTeam: {
+          name: "$opponentTeam.name",
+          logo: "$opponentTeam.logo",
+        },
+      },
+    },
+  ]);
 
-    const opponent =
-      match.teamA._id.toString() === player.team._id.toString()
-        ? match.teamB
-        : match.teamA;
-
-    matchStats.push({
-      matchId: match._id,
-      opponentTeam: { name: opponent.name, logo: opponent.logo },
-      raidPoints,
-      defensePoints,
-      totalPoints: matchTotalPoints,
-      super10,
-      high5,
-      superRaids,
-    });
-  });
+  // Compute total stats by summing over aggregation results
+  const totalStats = matches.reduce(
+    (acc, m) => {
+      acc.totalRaidPoints += m.raidPoints;
+      acc.totalDefensePoints += m.defensePoints;
+      acc.totalPoints += m.totalPoints;
+      acc.totalSuper10s += m.super10;
+      acc.totalHigh5s += m.high5;
+      acc.totalSuperRaids += m.superRaids;
+      return acc;
+    },
+    {
+      totalRaidPoints: 0,
+      totalDefensePoints: 0,
+      totalPoints: 0,
+      totalSuper10s: 0,
+      totalHigh5s: 0,
+      totalSuperRaids: 0,
+    }
+  );
 
   return {
     playerId,
     name: player.name,
     profilePic: player.profilePic,
     team: { name: player.team.name, logo: player.team.logo },
-    totalStats: {
-      totalRaidPoints,
-      totalDefensePoints,
-      totalPoints,
-      totalSuper10s,
-      totalHigh5s,
-      totalSuperRaids,
-    },
-    matchStats,
+    totalStats,
+    matchStats: matches,
   };
 }
 
