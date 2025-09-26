@@ -31,7 +31,10 @@ async function syncMatchToFirebase(matchId, teamId = null, points = null, type =
     lastAction,
   });
 }
-
+async function clearMatchFromFirebase(matchId) {
+  await db.ref(`matches/${matchId}`).remove();
+}
 module.exports = {
   syncMatchToFirebase,
+  clearMatchFromFirebase,
 };
