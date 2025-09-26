@@ -1,7 +1,10 @@
 const Match = require("../models/Match");
 const Player = require("../models/Player");
 const Team = require("../models/Team");
-const { syncMatchToFirebase } = require("../utils/firebaseUtils");
+const {
+  syncMatchToFirebase,
+  clearMatchFromFirebase,
+} = require("../utils/firebaseUtils");
 
 async function setMatchCompleted(matchId) {
   const updatedMatch = await Match.findByIdAndUpdate(
@@ -93,17 +96,23 @@ async function createMatch({ teamA, teamB, matchType, date }) {
 }
 
 async function updateMatch(matchId, updateData) {
-  const updatedMatch = await Match.findByIdAndUpdate(matchId, updateData, {
-    new: true,
-  });
-
-  if (!updatedMatch) {
+  const existingMatch = await Match.findById(matchId);
+  if (!existingMatch) {
     const error = new Error("Match not found");
     error.statusCode = 404;
     throw error;
   }
 
-  await syncMatchToFirebase(matchId);
+  const updatedMatch = await Match.findByIdAndUpdate(matchId, updateData, {
+    new: true,
+  });
+
+  if (existingMatch.status === "Ongoing" && updateData.status === "Completed") {
+    await clearMatchFromFirebase(matchId);
+  } else {
+    await syncMatchToFirebase(matchId);
+  }
+
   return updatedMatch;
 }
 
