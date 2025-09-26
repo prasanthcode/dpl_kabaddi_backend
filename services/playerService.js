@@ -5,8 +5,8 @@ const Team = require("../models/Team");
 const ErrorResponse = require("../utils/errorResponse");
 const {
   replaceImage,
-  uploadImageFromFile,
   deleteImageByUrl,
+  uploadImageFromBuffer,
 } = require("./imageService");
 
 async function getPlayersOfMatch(matchId) {
@@ -223,7 +223,7 @@ async function createPlayer({ name, team, profilePicFile }) {
   let profilePicUrl = null;
 
   if (profilePicFile) {
-    profilePicUrl = await uploadImageFromFile(profilePicFile);
+    profilePicUrl = await uploadImageFromBuffer(profilePicFile);
   }
 
   const newPlayer = new Player({

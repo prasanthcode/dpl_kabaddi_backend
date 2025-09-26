@@ -1,22 +1,18 @@
-const fs = require("fs");
 const cloudinary = require("../config/cloudinary");
 
-async function uploadImageFromFile(file) {
-  const filePath = file.path;
+// Upload from memory buffer
+async function uploadImageFromBuffer(file) {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { folder: "uploads" },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result.secure_url);
+      }
+    );
 
-  try {
-    const fileData = fs.readFileSync(filePath, { encoding: "base64" });
-    const mimeType = file.mimetype;
-    const base64Data = `data:${mimeType};base64,${fileData}`;
-
-    const result = await cloudinary.uploader.upload(base64Data, {
-      folder: "uploads",
-    });
-
-    return result.secure_url;
-  } finally {
-    fs.unlinkSync(filePath);
-  }
+    uploadStream.end(file.buffer);
+  });
 }
 
 async function uploadImageFromUrl(url) {
@@ -25,9 +21,9 @@ async function uploadImageFromUrl(url) {
 }
 
 async function deleteImage(publicId) {
-  const result = await cloudinary.uploader.destroy(publicId);
-  return result;
+  return await cloudinary.uploader.destroy(publicId);
 }
+
 async function replaceImage(oldUrl, file) {
   if (oldUrl) {
     const parts = oldUrl.split("/");
@@ -35,13 +31,11 @@ async function replaceImage(oldUrl, file) {
     const publicId = `uploads/${lastPart.split(".")[0]}`;
     await deleteImage(publicId);
   }
-
-  const newUrl = await uploadImageFromFile(file);
-  return newUrl;
+  return await uploadImageFromBuffer(file);
 }
+
 async function deleteImageByUrl(url) {
   if (!url) return null;
-
   try {
     const parts = url.split("/");
     const lastPart = parts[parts.length - 1];
@@ -52,21 +46,21 @@ async function deleteImageByUrl(url) {
     return null;
   }
 }
+
 function getPublicIdFromUrl(url) {
   if (!url) return null;
-
   try {
     const parts = url.split("/");
     const lastPart = parts[parts.length - 1];
-    const publicId = `${lastPart.split(".")[0]}`;
-    return publicId;
+    return lastPart.split(".")[0];
   } catch (err) {
     console.error("Error extracting publicId from URL:", err.message);
     return null;
   }
 }
+
 module.exports = {
-  uploadImageFromFile,
+  uploadImageFromBuffer,
   uploadImageFromUrl,
   deleteImage,
   replaceImage,

@@ -11,11 +11,16 @@ const {
 const router = express.Router();
 const multer = require("multer");
 const { adminOnly, protect } = require("../middleware/authMiddleware");
-const upload = multer({ dest: "tmp/" });
+
+// Use memory storage (no file system writes)
+const upload = multer({ storage: multer.memoryStorage() });
+
 router.get("/", getPlayers);
 router.get("/:playerId/info", getPlayerDetails);
 router.get("/:playerId", getPlayerById);
 router.get("/team/:teamId", getPlayersByTeam);
+
+// Protect admin routes
 router.use(protect, adminOnly);
 router.post("/", upload.single("profilePic"), createPlayer);
 router.delete("/:id", deletePlayer);

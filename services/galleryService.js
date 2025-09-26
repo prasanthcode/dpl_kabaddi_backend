@@ -1,9 +1,9 @@
 const Gallery = require("../models/Gallery");
 const {
-  uploadImageFromFile,
   uploadImageFromUrl,
   replaceImage,
   deleteImageByUrl,
+  uploadImageFromBuffer,
 } = require("../services/imageService");
 async function getGalleries(type) {
   const filter = {};
@@ -15,7 +15,7 @@ async function addGallery({ file, url, caption, type }) {
   let imageUrl;
 
   if (file) {
-    imageUrl = await uploadImageFromFile(file);
+    imageUrl = await uploadImageFromBuffer(file);
   } else if (url) {
     imageUrl = await uploadImageFromUrl(url);
   } else {

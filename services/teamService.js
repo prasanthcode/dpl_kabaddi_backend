@@ -4,8 +4,8 @@ const Player = require("../models/Player");
 const Team = require("../models/Team");
 const {
   replaceImage,
-  uploadImageFromFile,
   deleteImageByUrl,
+  uploadImageFromBuffer,
 } = require("./imageService");
 
 async function getTeams() {
@@ -28,7 +28,7 @@ async function createTeam({ name, logoFile }) {
   let logoUrl = null;
 
   if (logoFile) {
-    logoUrl = await uploadImageFromFile(logoFile);
+    logoUrl = await uploadImageFromBuffer(logoFile);
   }
 
   const newTeam = new Team({

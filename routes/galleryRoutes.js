@@ -3,7 +3,7 @@ const router = express.Router();
 const galleryController = require("../controllers/galleryController");
 const multer = require("multer");
 const { protect, adminOnly } = require("../middleware/authMiddleware");
-const upload = multer({ dest: "tmp/" });
+const upload = multer({ storage: multer.memoryStorage() });
 
 router.get("/", galleryController.getGalleries);
 
