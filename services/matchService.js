@@ -105,12 +105,14 @@ async function updateMatch(matchId, updateData) {
 
   const updatedMatch = await Match.findByIdAndUpdate(matchId, updateData, {
     new: true,
-  });
+  })
+    .populate("teamA", "name logo")
+    .populate("teamB", "name logo");
 
   if (existingMatch.status === "Ongoing" && updateData.status === "Completed") {
     await clearMatchFromFirebase(matchId);
   } else {
-    await syncMatchToFirebase(matchId);
+    await syncMatchToFirebase(updatedMatch);
   }
 
   return updatedMatch;
