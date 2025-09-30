@@ -40,7 +40,6 @@ exports.getPlayerDetails = asyncHandler(async (req, res) => {
 exports.getPlayersByTeam = asyncHandler(async (req, res) => {
   const { teamId } = req.params;
   const players = await getPlayersByTeam(teamId);
-  console.log(teamId);
   res.status(200).json(players);
 });
 
