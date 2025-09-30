@@ -289,17 +289,23 @@ async function getPlayerPoints(matchId, playerId, type = "raid") {
     throw new ErrorResponse("Type must be 'raid' or 'defense'", 400);
   }
 
-  const match = await Match.findById(matchId).populate("playerStats.player");
+  const match = await Match.findById(matchId).populate({
+    path: "playerStats.player",
+    match: { _id: playerId }, // only this player
+    select: "_id",            // only return _id
+  });
+
   if (!match) throw new ErrorResponse("Match not found", 404);
 
   const playerStat = match.playerStats.find(
-    (ps) => ps.player._id.toString() === playerId
+    (ps) => ps.player && ps.player._id.toString() === playerId
   );
 
   if (!playerStat) return [];
 
   return type === "raid" ? playerStat.raidPoints : playerStat.defensePoints;
 }
+
 module.exports = {
   getPlayersOfMatch,
   getPlayers,
