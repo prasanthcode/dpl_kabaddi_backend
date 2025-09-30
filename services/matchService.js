@@ -14,6 +14,7 @@ async function setMatchCompleted(matchId) {
   );
 
   if (!updatedMatch) return null;
+  await syncMatchToFirebase(updatedMatch);
 
   return updatedMatch;
 }
@@ -24,6 +25,7 @@ async function setHalfTimeStatus(matchId) {
     { halfTime: true }, // set Half Time flag
     { new: true }
   );
+  await syncMatchToFirebase(updatedMatch);
 
   return updatedMatch || null;
 }
