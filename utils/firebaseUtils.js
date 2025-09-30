@@ -1,13 +1,11 @@
 const db = require("../config/firebase");
-const { getPlayerNameById } = require("../services/playerService");
-const {} = require("../services/statsService");
 
 async function syncMatchToFirebase(
   match,
   teamId = null,
   points = null,
   type = null,
-  playerId = null
+  playerName = null
 ) {
   const stats = {
     teamA: {
@@ -35,12 +33,11 @@ async function syncMatchToFirebase(
           ? match.teamA?.name
           : match.teamB?.name) ?? "Unknown Team")
       : "Unknown Team",
-    playerName: getPlayerNameById(playerId) || "Unknown Player",
+    playerName: playerName || "Unknown Player",
     points: points ?? 0,
-    type: type || "unknown",
+    type: type || "Unknown",
     timestamp: Date.now(),
   };
-
   await db.ref(`matches/${match._id}`).update({ stats, lastAction });
 }
 

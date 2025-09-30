@@ -2,9 +2,6 @@ const Match = require("../models/Match");
 const Player = require("../models/Player");
 const { syncMatchToFirebase } = require("../utils/firebaseUtils");
 
-/** ─────────────────────────────
- *  Helper functions
- *  ───────────────────────────── */
 function updateTeamScore(match, teamId, points) {
   if (match.teamA.equals(teamId)) {
     match.teamAScore += points;
@@ -18,10 +15,19 @@ function updateTeamScore(match, teamId, points) {
 }
 
 async function getMatchWithPlayer(matchId, playerId) {
-  const match = await Match.findById(matchId)
+  const match = await Match.findById(matchId, {
+    teamA: 1,
+    teamB: 1,
+    teamAScore: 1,
+    teamBScore: 1,
+    status: 1,
+    matchNumber: 1,
+    matchType: 1,
+    playerStats: { $elemMatch: { player: playerId } },
+  })
     .populate("teamA", "name logo")
     .populate("teamB", "name logo")
-    .populate("playerStats.player", "team");
+    .populate("playerStats.player", "team name");
 
   if (!match) {
     const error = new Error("Match not found");
@@ -29,9 +35,7 @@ async function getMatchWithPlayer(matchId, playerId) {
     throw error;
   }
 
-  const playerStat = match.playerStats.find(
-    (stat) => stat.player._id.toString() === playerId
-  );
+  const playerStat = match.playerStats[0];
   if (!playerStat) {
     const error = new Error("Player not found in match");
     error.statusCode = 404;
@@ -41,13 +45,11 @@ async function getMatchWithPlayer(matchId, playerId) {
   return { match, playerStat, player: playerStat.player };
 }
 
-/** ─────────────────────────────
- *  Main operations
- *  ───────────────────────────── */
 async function addPointsToTeam({ matchId, teamId, points }) {
   const match = await Match.findById(matchId)
     .populate("teamA", "name logo")
-    .populate("teamB", "name logo");
+    .populate("teamB", "name logo")
+    .select("-playerStats");
 
   if (!match) {
     const error = new Error("Match not found");
@@ -64,8 +66,10 @@ async function addPointsToTeam({ matchId, teamId, points }) {
 }
 
 async function addPointsToPlayer({ matchId, playerId, points, type }) {
-  const { match, playerStat, player } = await getMatchWithPlayer(matchId, playerId);
-
+  const { match, playerStat, player } = await getMatchWithPlayer(
+    matchId,
+    playerId
+  );
   if (type === "defense") playerStat.defensePoints.push(points);
   else if (type === "raid") playerStat.raidPoints.push(points);
   else {
@@ -77,7 +81,7 @@ async function addPointsToPlayer({ matchId, playerId, points, type }) {
   updateTeamScore(match, player.team, points);
 
   await match.save();
-  await syncMatchToFirebase(match, player.team, points, type, playerId);
+  await syncMatchToFirebase(match, player.team, points, type, player.name);
 
   return {
     teamAScore: match.teamAScore,
@@ -107,7 +111,10 @@ async function removePointsFromTeam({ matchId, teamId, points }) {
 }
 
 async function undoPlayerPoints({ matchId, playerId, type }) {
-  const { match, playerStat, player } = await getMatchWithPlayer(matchId, playerId);
+  const { match, playerStat, player } = await getMatchWithPlayer(
+    matchId,
+    playerId
+  );
 
   if (type === "raid" && playerStat.raidPoints.length === 0)
     throw new Error("No raid points to remove for this player");

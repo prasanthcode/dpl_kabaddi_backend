@@ -146,6 +146,7 @@ async function endMatch(matchId) {
 async function deleteMatch(matchId) {
   const match = await Match.findById(matchId);
   if (!match) throw new Error("Match not found");
+  await clearMatchFromFirebase(matchId);
 
   await match.deleteOne();
   return match;
