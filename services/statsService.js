@@ -207,6 +207,7 @@ async function getPointsTable() {
       points: 0,
       finalWinner: false,
       qualifier: false,
+      lastThreeMatches: [], // <-- new field
     };
   });
 
@@ -218,10 +219,9 @@ async function getPointsTable() {
     ],
   };
 
-  const leagueMatches = await Match.find(leagueMatchFilter).populate(
-    "teamA teamB",
-    "name"
-  );
+  const leagueMatches = await Match.find(leagueMatchFilter)
+    .populate("teamA teamB", "name")
+    .sort({ date: 1 }); // sort by date ascending so latest is at the end
 
   const totalLeagueMatches = await Match.countDocuments(leagueMatchFilter);
   const completedLeagueMatches = await Match.countDocuments({
@@ -234,25 +234,45 @@ async function getPointsTable() {
     .forEach(({ teamA, teamB, teamAScore, teamBScore }) => {
       pointsTable[teamA._id].matchesPlayed++;
       pointsTable[teamB._id].matchesPlayed++;
+
       pointsTable[teamA._id].pointsDifference += teamAScore - teamBScore;
       pointsTable[teamB._id].pointsDifference += teamBScore - teamAScore;
+
+      let teamAResult, teamBResult;
 
       if (teamAScore > teamBScore) {
         pointsTable[teamA._id].wins++;
         pointsTable[teamA._id].points += 2;
         pointsTable[teamB._id].losses++;
+        teamAResult = "W";
+        teamBResult = "L";
       } else if (teamBScore > teamAScore) {
         pointsTable[teamB._id].wins++;
         pointsTable[teamB._id].points += 2;
         pointsTable[teamA._id].losses++;
+        teamAResult = "L";
+        teamBResult = "W";
       } else {
         pointsTable[teamA._id].ties++;
         pointsTable[teamB._id].ties++;
         pointsTable[teamA._id].points++;
         pointsTable[teamB._id].points++;
+        teamAResult = "T";
+        teamBResult = "T";
       }
+
+      // Track last three matches
+      const updateLastThree = (teamId, result) => {
+        const arr = pointsTable[teamId].lastThreeMatches;
+        arr.push(result);
+        if (arr.length > 3) arr.shift(); // keep only last 3
+      };
+
+      updateLastThree(teamA._id, teamAResult);
+      updateLastThree(teamB._id, teamBResult);
     });
 
+  // Final winner
   const finalResult = await getFinalMatchWinners();
   if (finalResult?.name) {
     const winnerTeam = Object.values(pointsTable).find(
@@ -263,12 +283,14 @@ async function getPointsTable() {
     }
   }
 
+  // Sort points table
   const sortedPointsTable = Object.values(pointsTable).sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
     if (b.wins !== a.wins) return b.wins - a.wins;
     return b.pointsDifference - a.pointsDifference;
   });
 
+  // Mark qualifiers if all league matches completed
   if (completedLeagueMatches === totalLeagueMatches && totalLeagueMatches > 0) {
     sortedPointsTable.slice(0, 4).forEach((team) => {
       team.qualifier = true;
@@ -277,6 +299,7 @@ async function getPointsTable() {
 
   return sortedPointsTable;
 }
+
 
 async function getMatchTotalPoints(matchId) {
   const pipeline = [
@@ -588,12 +611,67 @@ async function getRankedTeams(statField = null, limit = 10) {
               },
             },
           },
+          // Lookup player documents to get team information
+          {
+            $lookup: {
+              from: "players",
+              localField: "playerStats.player",
+              foreignField: "_id",
+              as: "playerDocs",
+            },
+          },
+          {
+            $project: {
+              // Filter playerStats to only include players from this team
+              teamPlayerStats: {
+                $filter: {
+                  input: {
+                    $map: {
+                      input: "$playerStats",
+                      as: "ps",
+                      in: {
+                        $let: {
+                          vars: {
+                            playerDoc: {
+                              $arrayElemAt: [
+                                {
+                                  $filter: {
+                                    input: "$playerDocs",
+                                    as: "pd",
+                                    cond: { $eq: ["$$pd._id", "$$ps.player"] },
+                                  },
+                                },
+                                0,
+                              ],
+                            },
+                          },
+                          in: {
+                            $cond: [
+                              { $eq: ["$$playerDoc.team", "$$teamId"] },
+                              {
+                                player: "$$ps.player",
+                                raidPoints: "$$ps.raidPoints",
+                                defensePoints: "$$ps.defensePoints",
+                              },
+                              null,
+                            ],
+                          },
+                        },
+                      },
+                    },
+                  },
+                  as: "tps",
+                  cond: { $ne: ["$$tps", null] },
+                },
+              },
+            },
+          },
           {
             $project: {
               raidPoints: {
                 $sum: {
                   $map: {
-                    input: "$playerStats",
+                    input: "$teamPlayerStats",
                     as: "p",
                     in: { $sum: "$$p.raidPoints" },
                   },
@@ -602,47 +680,39 @@ async function getRankedTeams(statField = null, limit = 10) {
               defensePoints: {
                 $sum: {
                   $map: {
-                    input: "$playerStats",
+                    input: "$teamPlayerStats",
                     as: "p",
                     in: { $sum: "$$p.defensePoints" },
                   },
                 },
               },
-              // Player-level Super 10s
+              // Player-level Super 10s (total raid points >= 10)
               super10s: {
                 $size: {
                   $filter: {
-                    input: "$playerStats",
+                    input: "$teamPlayerStats",
                     as: "p",
                     cond: { $gte: [{ $sum: "$$p.raidPoints" }, 10] },
                   },
                 },
               },
-              // Player-level High 5s
+              // Player-level High 5s (total defense points >= 5)
               high5s: {
                 $size: {
                   $filter: {
-                    input: "$playerStats",
+                    input: "$teamPlayerStats",
                     as: "p",
                     cond: { $gte: [{ $sum: "$$p.defensePoints" }, 5] },
                   },
                 },
               },
-              // Super Raids (raids with >= 3 points)
+              // Super Raids (players with total raid points >= 8 in a match)
               superRaids: {
-                $sum: {
-                  $map: {
-                    input: "$playerStats",
+                $size: {
+                  $filter: {
+                    input: "$teamPlayerStats",
                     as: "p",
-                    in: {
-                      $size: {
-                        $filter: {
-                          input: "$$p.raidPoints",
-                          as: "r",
-                          cond: { $gte: ["$$r", 3] },
-                        },
-                      },
-                    },
+                    cond: { $gte: [{ $sum: "$$p.raidPoints" }, 8] },
                   },
                 },
               },
