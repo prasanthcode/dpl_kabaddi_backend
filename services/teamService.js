@@ -97,8 +97,6 @@ async function teamStats(teamId) {
         $or: [{ teamA: teamObjectId }, { teamB: teamObjectId }],
       },
     },
-
-    // Populate teamA and teamB
     {
       $lookup: {
         from: "teams",
@@ -117,38 +115,16 @@ async function teamStats(teamId) {
       },
     },
     { $unwind: "$teamBData" },
-
-    // Unwind playerStats
-    { $unwind: { path: "$playerStats", preserveNullAndEmptyArrays: true } },
-
-    // Lookup player to get their team
     {
       $lookup: {
         from: "players",
         localField: "playerStats.player",
         foreignField: "_id",
-        as: "playerDoc",
+        as: "playerDocs",
       },
     },
-    { $unwind: { path: "$playerDoc", preserveNullAndEmptyArrays: true } },
-
-    // Compute raid and tackle points only for players in the given team
     {
       $addFields: {
-        raidPointsForTeam: {
-          $cond: [
-            { $eq: ["$playerDoc.team", teamObjectId] },
-            { $sum: "$playerStats.raidPoints" },
-            0,
-          ],
-        },
-        tacklePointsForTeam: {
-          $cond: [
-            { $eq: ["$playerDoc.team", teamObjectId] },
-            { $sum: "$playerStats.defensePoints" },
-            0,
-          ],
-        },
         teamScore: {
           $cond: [
             { $eq: ["$teamA", teamObjectId] },
@@ -163,28 +139,123 @@ async function teamStats(teamId) {
             "$teamAScore",
           ],
         },
-        teamA: "$teamAData",
-        teamB: "$teamBData",
+        // Calculate raid points for this team
+        totalRaidPoints: {
+          $sum: {
+            $map: {
+              input: "$playerStats",
+              as: "ps",
+              in: {
+                $let: {
+                  vars: {
+                    playerDoc: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: "$playerDocs",
+                            as: "pd",
+                            cond: { $eq: ["$$pd._id", "$$ps.player"] },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                  },
+                  in: {
+                    $cond: [
+                      { $eq: ["$$playerDoc.team", teamObjectId] },
+                      { $sum: "$$ps.raidPoints" },
+                      0,
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+        // Calculate defense points for this team
+        totalTacklePoints: {
+          $sum: {
+            $map: {
+              input: "$playerStats",
+              as: "ps",
+              in: {
+                $let: {
+                  vars: {
+                    playerDoc: {
+                      $arrayElemAt: [
+                        {
+                          $filter: {
+                            input: "$playerDocs",
+                            as: "pd",
+                            cond: { $eq: ["$$pd._id", "$$ps.player"] },
+                          },
+                        },
+                        0,
+                      ],
+                    },
+                  },
+                  in: {
+                    $cond: [
+                      { $eq: ["$$playerDoc.team", teamObjectId] },
+                      { $sum: "$$ps.defensePoints" },
+                      0,
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        },
+        // Enrich playerStats with team info for later processing
+        enrichedPlayerStats: {
+          $map: {
+            input: "$playerStats",
+            as: "ps",
+            in: {
+              $let: {
+                vars: {
+                  playerDoc: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: "$playerDocs",
+                          as: "pd",
+                          cond: { $eq: ["$$pd._id", "$$ps.player"] },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                },
+                in: {
+                  player: "$$ps.player",
+                  raidPoints: "$$ps.raidPoints",
+                  defensePoints: "$$ps.defensePoints",
+                  playerTeam: "$$playerDoc.team",
+                },
+              },
+            },
+          },
+        },
       },
     },
-
-    // Group back by match to sum player points
     {
-      $group: {
-        _id: "$_id",
-        teamScore: { $first: "$teamScore" },
-        opponentScore: { $first: "$opponentScore" },
-        teamA: { $first: "$teamA" },
-        teamB: { $first: "$teamB" },
-        teamAScore: { $first: "$teamAScore" },
-        teamBScore: { $first: "$teamBScore" },
-        totalRaidPoints: { $sum: "$raidPointsForTeam" },
-        totalTacklePoints: { $sum: "$tacklePointsForTeam" },
+      $project: {
+        teamScore: 1,
+        opponentScore: 1,
+        teamA: "$teamAData",
+        teamB: "$teamBData",
+        teamAScore: 1,
+        teamBScore: 1,
+        totalRaidPoints: 1,
+        totalTacklePoints: 1,
+        enrichedPlayerStats: 1,
       },
     },
   ]);
 
-  // Compute overall stats
+  // Initialize stats
   let wins = 0,
     losses = 0,
     ties = 0,
@@ -193,19 +264,24 @@ async function teamStats(teamId) {
     highestMarginWinMatch = null,
     totalRaidPoints = 0,
     totalTacklePoints = 0,
+    totalPoints = 0,
+    super10s = 0,
+    high5s = 0,
+    superRaids = 0,
     matchesPlayed = matches.length;
 
   for (const match of matches) {
-    const { teamScore, opponentScore } = match;
+    const { teamScore, opponentScore, enrichedPlayerStats } = match;
 
+    // Wins, losses, ties
     if (teamScore > opponentScore) {
       wins++;
       const margin = teamScore - opponentScore;
       if (margin > highestWinMargin) {
         highestWinMargin = margin;
         highestMarginWinMatch = {
-          teamA: { name: match.teamA.name, logo: match.teamA.logo },
-          teamB: { name: match.teamB.name, logo: match.teamB.logo },
+          teamA: match.teamA,
+          teamB: match.teamB,
           teamAScore: match.teamAScore,
           teamBScore: match.teamBScore,
         };
@@ -220,7 +296,26 @@ async function teamStats(teamId) {
 
     totalRaidPoints += match.totalRaidPoints || 0;
     totalTacklePoints += match.totalTacklePoints || 0;
+    totalPoints +=
+      (match.totalRaidPoints || 0) + (match.totalTacklePoints || 0);
+
+    // Super10s, High5s, SuperRaids - only for this team's players
+    for (const ps of enrichedPlayerStats || []) {
+      if (!ps || !ps.playerTeam || !ps.playerTeam.equals(teamObjectId))
+        continue;
+
+      const raidSum = (ps.raidPoints || []).reduce((a, b) => a + b, 0);
+      const defenseSum = (ps.defensePoints || []).reduce((a, b) => a + b, 0);
+
+      if (raidSum >= 10) super10s++;
+      if (defenseSum >= 5) high5s++;
+      if (raidSum >= 8) superRaids++;
+    }
   }
+
+  const avgRaid = matchesPlayed ? totalRaidPoints / matchesPlayed : 0;
+  const avgDefense = matchesPlayed ? totalTacklePoints / matchesPlayed : 0;
+  const avgTotalPoints = matchesPlayed ? totalPoints / matchesPlayed : 0;
 
   return {
     teamId: teamId.toString(),
@@ -233,8 +328,15 @@ async function teamStats(teamId) {
     highestScore,
     highestWinMargin,
     highestMarginWinMatch,
-    totalRaidPoints,
-    totalTacklePoints,
+    totalRaidPoints: Math.round(totalRaidPoints),
+    totalTacklePoints: Math.round(totalTacklePoints),
+    totalPoints: Math.round(totalPoints),
+    super10s,
+    high5s,
+    superRaids,
+    avgRaid: Math.round(avgRaid * 100) / 100,
+    avgDefense: Math.round(avgDefense * 100) / 100,
+    avgTotalPoints: Math.round(avgTotalPoints * 100) / 100,
   };
 }
 
