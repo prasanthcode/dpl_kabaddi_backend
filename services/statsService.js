@@ -561,7 +561,6 @@ async function getRankedTeams(statField = null, limit = 10) {
 
   // Build $project dynamically
   const projectStage = {
-    _id: 0,
     name: 1,
     logo: 1,
   };
