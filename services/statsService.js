@@ -207,9 +207,13 @@ async function getPointsTable() {
       points: 0,
       finalWinner: false,
       qualifier: false,
-      lastThreeMatches: [], // <-- new field
+      lastThreeMatches: [],
     };
   });
+
+  const allMatches = await Match.find({})
+    .populate("teamA teamB", "name")
+    .sort({ date: 1 });
 
   const leagueMatchFilter = {
     $or: [
@@ -218,20 +222,17 @@ async function getPointsTable() {
       { matchType: "Regular" },
     ],
   };
-
-  const leagueMatches = await Match.find(leagueMatchFilter)
-    .populate("teamA teamB", "name")
-    .sort({ date: 1 }); // sort by date ascending so latest is at the end
-
   const totalLeagueMatches = await Match.countDocuments(leagueMatchFilter);
   const completedLeagueMatches = await Match.countDocuments({
     ...leagueMatchFilter,
     status: "Completed",
   });
 
-  leagueMatches
+  allMatches
     .filter((m) => m.status === "Completed")
     .forEach(({ teamA, teamB, teamAScore, teamBScore }) => {
+      if (!pointsTable[teamA._id] || !pointsTable[teamB._id]) return;
+
       pointsTable[teamA._id].matchesPlayed++;
       pointsTable[teamB._id].matchesPlayed++;
 
@@ -261,40 +262,31 @@ async function getPointsTable() {
         teamBResult = "T";
       }
 
-      // Track last three matches
       const updateLastThree = (teamId, result) => {
         const arr = pointsTable[teamId].lastThreeMatches;
         arr.push(result);
-        if (arr.length > 3) arr.shift(); // keep only last 3
       };
 
       updateLastThree(teamA._id, teamAResult);
       updateLastThree(teamB._id, teamBResult);
     });
 
-  // Final winner
   const finalResult = await getFinalMatchWinners();
   if (finalResult?.name) {
     const winnerTeam = Object.values(pointsTable).find(
       (team) => team.teamName === finalResult.name
     );
-    if (winnerTeam) {
-      winnerTeam.finalWinner = true;
-    }
+    if (winnerTeam) winnerTeam.finalWinner = true;
   }
 
-  // Sort points table
   const sortedPointsTable = Object.values(pointsTable).sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
     if (b.wins !== a.wins) return b.wins - a.wins;
     return b.pointsDifference - a.pointsDifference;
   });
 
-  // Mark qualifiers if all league matches completed
   if (completedLeagueMatches === totalLeagueMatches && totalLeagueMatches > 0) {
-    sortedPointsTable.slice(0, 4).forEach((team) => {
-      team.qualifier = true;
-    });
+    sortedPointsTable.slice(0, 4).forEach((team) => (team.qualifier = true));
   }
 
   return sortedPointsTable;
