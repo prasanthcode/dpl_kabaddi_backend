@@ -194,7 +194,7 @@ async function getPointsTable() {
   const allTeams = await Team.find({}, "name logo");
 
   const pointsTable = {};
-  allTeams.forEach((team) => {
+  for (const team of allTeams) {
     pointsTable[team._id] = {
       teamId: team._id,
       teamName: team.name,
@@ -209,74 +209,75 @@ async function getPointsTable() {
       qualifier: false,
       lastThreeMatches: [],
     };
-  });
+  }
 
-  const allMatches = await Match.find({})
+  const allMatches = await Match.find({ status: "Completed" })
     .populate("teamA teamB", "name")
     .sort({ date: -1 });
 
-  const leagueMatchFilter = {
-    $or: [
-      { matchType: { $exists: false } },
-      { matchType: "" },
-      { matchType: "Regular" },
-    ],
-  };
-  const totalLeagueMatches = await Match.countDocuments(leagueMatchFilter);
-  const completedLeagueMatches = await Match.countDocuments({
-    ...leagueMatchFilter,
-    status: "Completed",
-  });
+  const isLeagueMatch = (matchType) =>
+    !matchType || matchType === "" || matchType === "Regular";
 
-  allMatches
-    .filter((m) => m.status === "Completed")
-    .forEach(({ teamA, teamB, teamAScore, teamBScore }) => {
-      if (!pointsTable[teamA._id] || !pointsTable[teamB._id]) return;
+  let totalLeagueMatches = 0;
+  let completedLeagueMatches = 0;
 
-      pointsTable[teamA._id].matchesPlayed++;
-      pointsTable[teamB._id].matchesPlayed++;
+  for (const match of allMatches) {
+    if (!match.teamA || !match.teamB) continue;
+    const { teamA, teamB, teamAScore, teamBScore, matchType } = match;
 
-      pointsTable[teamA._id].pointsDifference += teamAScore - teamBScore;
-      pointsTable[teamB._id].pointsDifference += teamBScore - teamAScore;
+    if (isLeagueMatch(matchType)) {
+      totalLeagueMatches++;
+      completedLeagueMatches++;
 
-      let teamAResult, teamBResult;
+      const teamAStats = pointsTable[teamA._id];
+      const teamBStats = pointsTable[teamB._id];
 
-      if (teamAScore > teamBScore) {
-        pointsTable[teamA._id].wins++;
-        pointsTable[teamA._id].points += 2;
-        pointsTable[teamB._id].losses++;
-        teamAResult = "W";
-        teamBResult = "L";
-      } else if (teamBScore > teamAScore) {
-        pointsTable[teamB._id].wins++;
-        pointsTable[teamB._id].points += 2;
-        pointsTable[teamA._id].losses++;
-        teamAResult = "L";
-        teamBResult = "W";
-      } else {
-        pointsTable[teamA._id].ties++;
-        pointsTable[teamB._id].ties++;
-        pointsTable[teamA._id].points++;
-        pointsTable[teamB._id].points++;
-        teamAResult = "T";
-        teamBResult = "T";
+      if (teamAStats && teamBStats) {
+        teamAStats.matchesPlayed++;
+        teamBStats.matchesPlayed++;
+
+        teamAStats.pointsDifference += teamAScore - teamBScore;
+        teamBStats.pointsDifference += teamBScore - teamAScore;
+
+        if (teamAScore > teamBScore) {
+          teamAStats.wins++;
+          teamAStats.points += 2;
+          teamBStats.losses++;
+        } else if (teamBScore > teamAScore) {
+          teamBStats.wins++;
+          teamBStats.points += 2;
+          teamAStats.losses++;
+        } else {
+          teamAStats.ties++;
+          teamBStats.ties++;
+          teamAStats.points++;
+          teamBStats.points++;
+        }
       }
+    }
 
-      const updateLastThree = (teamId, result) => {
-        const arr = pointsTable[teamId].lastThreeMatches;
-        arr.push(result);
-      };
+    const teamAResult =
+      teamAScore > teamBScore ? "W" : teamBScore > teamAScore ? "L" : "T";
+    const teamBResult =
+      teamBScore > teamAScore ? "W" : teamAScore > teamBScore ? "L" : "T";
 
-      updateLastThree(teamA._id, teamAResult);
-      updateLastThree(teamB._id, teamBResult);
-    });
+    const addLastResult = (teamId, result) => {
+      const arr = pointsTable[teamId]?.lastThreeMatches;
+      if (!arr) return;
+      arr.unshift(result);
+      if (arr.length > 4) arr.pop();
+    };
+
+    addLastResult(teamA._id, teamAResult);
+    addLastResult(teamB._id, teamBResult);
+  }
 
   const finalResult = await getFinalMatchWinners();
   if (finalResult?.name) {
-    const winnerTeam = Object.values(pointsTable).find(
-      (team) => team.teamName === finalResult.name
+    const winner = Object.values(pointsTable).find(
+      (t) => t.teamName === finalResult.name
     );
-    if (winnerTeam) winnerTeam.finalWinner = true;
+    if (winner) winner.finalWinner = true;
   }
 
   const sortedPointsTable = Object.values(pointsTable).sort((a, b) => {
@@ -286,12 +287,11 @@ async function getPointsTable() {
   });
 
   if (completedLeagueMatches === totalLeagueMatches && totalLeagueMatches > 0) {
-    sortedPointsTable.slice(0, 4).forEach((team) => (team.qualifier = true));
+    sortedPointsTable.slice(0, 4).forEach((t) => (t.qualifier = true));
   }
 
   return sortedPointsTable;
 }
-
 
 async function getMatchTotalPoints(matchId) {
   const pipeline = [
