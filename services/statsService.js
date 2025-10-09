@@ -213,7 +213,7 @@ async function getPointsTable() {
 
   const allMatches = await Match.find({})
     .populate("teamA teamB", "name")
-    .sort({ date: 1 });
+    .sort({ date: -1 });
 
   const leagueMatchFilter = {
     $or: [
