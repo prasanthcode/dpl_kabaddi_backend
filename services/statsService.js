@@ -264,8 +264,8 @@ async function getPointsTable() {
     const addLastResult = (teamId, result) => {
       const arr = pointsTable[teamId]?.lastThreeMatches;
       if (!arr) return;
-      arr.unshift(result);
-      if (arr.length > 4) arr.pop();
+      arr.push(result); 
+      if (arr.length > 4) arr.shift(); 
     };
 
     addLastResult(teamA._id, teamAResult);
