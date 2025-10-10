@@ -95,7 +95,7 @@ async function getUpcomingMatches(limit = null) {
     .populate("teamA", "name logo")
     .populate("teamB", "name logo")
     .sort({ date: 1, matchNumber: -1 })
-    .select("_id date teamA teamB matchNumber matchType");
+    .select("_id date teamA teamB matchNumber matchType status");
 
   if (limit) query = query.limit(limit);
 
@@ -106,6 +106,7 @@ async function getUpcomingMatches(limit = null) {
     matchType: match.matchType,
     matchNumber: match.matchNumber,
     date: match.date || "To be Announced",
+    status: match.status || "Upcoming",
     teamA: {
       name: match.teamA?.name || "TBD",
       logo: match.teamA?.logo || "https://dummyimage.com/100",
