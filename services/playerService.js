@@ -107,11 +107,11 @@ async function getPlayerDetails(playerId) {
 
   const playerObjectId = new mongoose.Types.ObjectId(playerId);
 
-  // Aggregate match stats for this player
   const matches = await Match.aggregate([
-    { $match: { status: "Completed", "playerStats.player": playerObjectId } },
+    {
+      $match: { status: "Completed", "playerStats.player": playerObjectId },
+    },
 
-    // Populate teamA and teamB
     {
       $lookup: {
         from: "teams",
@@ -121,6 +121,7 @@ async function getPlayerDetails(playerId) {
       },
     },
     { $unwind: "$teamAData" },
+
     {
       $lookup: {
         from: "teams",
@@ -131,19 +132,15 @@ async function getPlayerDetails(playerId) {
     },
     { $unwind: "$teamBData" },
 
-    // Unwind playerStats for this player
     { $unwind: "$playerStats" },
     { $match: { "playerStats.player": playerObjectId } },
 
-    // Compute per-match stats
     {
       $addFields: {
         raidPoints: { $sum: "$playerStats.raidPoints" },
         defensePoints: { $sum: "$playerStats.defensePoints" },
         totalPoints: {
-          $sum: {
-            $sum: ["$playerStats.raidPoints", "$playerStats.defensePoints"],
-          },
+          $sum: ["$playerStats.raidPoints", "$playerStats.defensePoints"],
         },
         super10: {
           $cond: [{ $gte: [{ $sum: "$playerStats.raidPoints" }, 10] }, 1, 0],
@@ -160,35 +157,38 @@ async function getPlayerDetails(playerId) {
             },
           },
         },
-        opponentTeam: {
-          $cond: [
-            { $eq: ["$teamA", player.team._id] },
-            "$teamBData",
-            "$teamAData",
-          ],
-        },
       },
     },
-
-    // Project the final fields
+    {
+      $sort: { date: -1 },
+    },
     {
       $project: {
         matchId: "$_id",
+        matchNumber: 1,
+        matchType: 1,
+        status: 1,
+        halfTime: 1,
+        teamA: {
+          name: "$teamAData.name",
+          logo: "$teamAData.logo",
+          score: "$teamAData.score",
+        },
+        teamB: {
+          name: "$teamBData.name",
+          logo: "$teamBData.logo",
+          score: "$teamBData.score",
+        },
         raidPoints: 1,
         defensePoints: 1,
         totalPoints: 1,
         super10: 1,
         high5: 1,
         superRaids: 1,
-        opponentTeam: {
-          name: "$opponentTeam.name",
-          logo: "$opponentTeam.logo",
-        },
       },
     },
   ]);
 
-  // Compute total stats by summing over aggregation results
   const totalStats = matches.reduce(
     (acc, m) => {
       acc.totalRaidPoints += m.raidPoints;
@@ -292,7 +292,7 @@ async function getPlayerPoints(matchId, playerId, type = "raid") {
   const match = await Match.findById(matchId).populate({
     path: "playerStats.player",
     match: { _id: playerId }, // only this player
-    select: "_id",            // only return _id
+    select: "_id", // only return _id
   });
 
   if (!match) throw new ErrorResponse("Match not found", 404);
