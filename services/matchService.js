@@ -11,24 +11,27 @@ async function setMatchCompleted(matchId) {
     matchId,
     { status: "Completed" },
     { new: true }
-  );
+  ).populate("teamA teamB"); 
 
   if (!updatedMatch) return null;
-  await syncMatchToFirebase(updatedMatch);
 
+  await syncMatchToFirebase(updatedMatch);
   return updatedMatch;
 }
 
 async function setHalfTimeStatus(matchId) {
   const updatedMatch = await Match.findByIdAndUpdate(
     matchId,
-    { halfTime: true }, // set Half Time flag
+    { halfTime: true },
     { new: true }
-  );
-  await syncMatchToFirebase(updatedMatch);
+  ).populate("teamA teamB"); 
 
-  return updatedMatch || null;
+  if (!updatedMatch) return null;
+
+  await syncMatchToFirebase(updatedMatch);
+  return updatedMatch;
 }
+
 
 async function getHalfTimeStatus(matchId) {
   const match = await Match.findById(matchId).select("halfTime");
