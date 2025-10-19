@@ -2,7 +2,6 @@ const asyncHandler = require("express-async-handler");
 const {
   getTopPlayersService,
   getMatchStats,
-  getMatchStatsByTeam,
   getMatchTotalPoints,
   getPointsTable,
   getFinalMatchWinners,
@@ -88,13 +87,7 @@ exports.getMatchTotalPoints = asyncHandler(async (req, res) => {
   res.json(teamStats);
 });
 
-exports.getMatchStatsLive = asyncHandler(async (req, res) => {
-  const { matchId } = req.params;
-  const { team } = req.query;
 
-  const stats = await getMatchStatsByTeam(matchId, team);
-  res.json(stats);
-});
 exports.getMatchStats = asyncHandler(async (req, res) => {
   const { matchId } = req.params;
   const stats = await getMatchStats(matchId);

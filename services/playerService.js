@@ -260,20 +260,6 @@ async function deletePlayer(playerId) {
   return { message: "Player and profile pic deleted" };
 }
 
-async function setProfilePic(playerId, profilePic) {
-  const player = await Player.findByIdAndUpdate(
-    playerId,
-    { profilePic },
-    { new: true, runValidators: true }
-  );
-  return player;
-}
-
-async function bulkInsertPlayers(players) {
-  const insertedPlayers = await Player.insertMany(players);
-  return insertedPlayers;
-}
-
 async function getPlayerNameById(playerId) {
   if (!playerId) return null;
   try {
@@ -313,8 +299,6 @@ module.exports = {
   createPlayer,
   getPlayersByTeam,
   deletePlayer,
-  setProfilePic,
-  bulkInsertPlayers,
   getPlayerById,
   updatePlayer,
   getPlayerNameById,

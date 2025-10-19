@@ -264,8 +264,8 @@ async function getPointsTable() {
     const addLastResult = (teamId, result) => {
       const arr = pointsTable[teamId]?.lastThreeMatches;
       if (!arr) return;
-      arr.push(result); 
-      if (arr.length > 4) arr.shift(); 
+      arr.push(result);
+      if (arr.length > 4) arr.shift();
     };
 
     addLastResult(teamA._id, teamAResult);
@@ -398,52 +398,6 @@ async function getMatchTotalPoints(matchId) {
   });
 
   return teamStats;
-}
-
-async function getMatchStatsByTeam(matchId, team) {
-  if (!["A", "B"].includes(team)) {
-    throw new Error("Invalid team parameter. Use 'A' or 'B'.");
-  }
-
-  const teamField = team === "A" ? "teamA" : "teamB";
-
-  const match = await Match.findById(matchId)
-    .populate({ path: teamField, select: "name" })
-    .populate({
-      path: "playerStats.player",
-      select: "name team",
-      populate: { path: "team", select: "name" },
-    });
-
-  if (!match) {
-    const error = new Error("Match not found");
-    error.statusCode = 404;
-    throw error;
-  }
-
-  const selectedTeamName = team === "A" ? match.teamA.name : match.teamB.name;
-
-  let raiders = [];
-  let defenders = [];
-
-  match.playerStats.forEach(({ player, raidPoints, defensePoints }) => {
-    if (player.team.name !== selectedTeamName) return;
-
-    const totalRaidPoints = raidPoints.reduce((sum, val) => sum + val, 0);
-    const totalDefensePoints = defensePoints.reduce((sum, val) => sum + val, 0);
-
-    if (totalRaidPoints > 0) {
-      raiders.push({ name: player.name, totalRaidPoints });
-    }
-    if (totalDefensePoints > 0) {
-      defenders.push({ name: player.name, totalDefensePoints });
-    }
-  });
-
-  raiders.sort((a, b) => b.totalRaidPoints - a.totalRaidPoints);
-  defenders.sort((a, b) => b.totalDefensePoints - a.totalDefensePoints);
-
-  return { topRaiders: raiders, topDefenders: defenders };
 }
 
 async function getFinalMatchWinners() {
@@ -774,7 +728,6 @@ async function getTopTeamsService(category = null) {
 
 module.exports = {
   getMatchStats,
-  getMatchStatsByTeam,
   getMatchTotalPoints,
   getPointsTable,
   getFinalMatchWinners,

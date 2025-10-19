@@ -1,9 +1,6 @@
 const asyncHandler = require("express-async-handler");
 const {
   setHalfTimeStatus,
-  setMatchCompleted,
-  getHalfTimeStatus,
-  updateTeamMat,
   updateMatch,
   startMatch,
   endMatch,
@@ -26,18 +23,6 @@ exports.endMatch = asyncHandler(async (req, res) => {
   res.json({ message: "Match ended", match });
 });
 
-exports.setMatchCompleted = asyncHandler(async (req, res) => {
-  const { matchId } = req.params;
-  const updatedMatch = await setMatchCompleted(matchId);
-
-  if (!updatedMatch) {
-    res.status(404);
-    throw new Error("Match not found");
-  }
-
-  res.status(200).json(updatedMatch);
-});
-
 exports.setHalfTimeStatus = asyncHandler(async (req, res) => {
   const { matchId } = req.params;
 
@@ -50,28 +35,6 @@ exports.setHalfTimeStatus = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     message: "Half Time status updated",
-    match: updatedMatch,
-  });
-});
-
-exports.getHalfTimeStatus = asyncHandler(async (req, res) => {
-  const { matchId } = req.params;
-
-  const halfTime = await getHalfTimeStatus(matchId);
-
-  if (halfTime === null) {
-    return res.status(404).json({ error: "Match not found" });
-  }
-
-  res.json({ halfTime });
-});
-exports.updateTeamMat = asyncHandler(async (req, res) => {
-  const { matchId } = req.params;
-  const { teamAMat, teamBMat } = req.body;
-
-  const updatedMatch = await updateTeamMat(matchId, teamAMat, teamBMat);
-  res.json({
-    message: "Updated team mat players successfully",
     match: updatedMatch,
   });
 });

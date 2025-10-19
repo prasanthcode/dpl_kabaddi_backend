@@ -7,8 +7,6 @@ const {
   createPlayer,
   getPlayersByTeam,
   deletePlayer,
-  bulkInsertPlayers,
-  setProfilePic,
   getPlayerById,
   updatePlayer,
   getPlayerPoints,
@@ -61,40 +59,6 @@ exports.deletePlayer = asyncHandler(async (req, res) => {
   }
 
   res.status(200).json({ message: "Player removed" });
-});
-
-exports.setProfilePic = asyncHandler(async (req, res) => {
-  const { playerId, profilePic } = req.body;
-
-  if (!playerId || !profilePic) {
-    return res
-      .status(400)
-      .json({ message: "Player ID and profile picture URL are required" });
-  }
-
-  const player = await setProfilePic(playerId, profilePic);
-
-  if (!player) {
-    return res.status(404).json({ message: "Player not found" });
-  }
-
-  res
-    .status(200)
-    .json({ message: "Profile picture updated successfully", player });
-});
-exports.bulkPlayer = asyncHandler(async (req, res) => {
-  const { players } = req.body;
-
-  if (!players || !Array.isArray(players) || players.length === 0) {
-    return res.status(400).json({ message: "Invalid player data" });
-  }
-
-  const insertedPlayers = await bulkInsertPlayers(players);
-
-  res.status(201).json({
-    message: "Players added successfully",
-    players: insertedPlayers,
-  });
 });
 
 exports.updatePlayer = asyncHandler(async (req, res) => {
