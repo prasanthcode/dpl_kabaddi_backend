@@ -11,11 +11,12 @@ async function setMatchCompleted(matchId) {
     matchId,
     { status: "Completed" },
     { new: true }
-  ).populate("teamA teamB"); 
+  ).populate("teamA teamB");
 
   if (!updatedMatch) return null;
 
-  await syncMatchToFirebase(updatedMatch);
+  // await clearMatchFromFirebase(matchId);
+
   return updatedMatch;
 }
 
@@ -24,14 +25,13 @@ async function setHalfTimeStatus(matchId) {
     matchId,
     { halfTime: true },
     { new: true }
-  ).populate("teamA teamB"); 
+  ).populate("teamA teamB");
 
   if (!updatedMatch) return null;
 
   await syncMatchToFirebase(updatedMatch);
   return updatedMatch;
 }
-
 
 async function getHalfTimeStatus(matchId) {
   const match = await Match.findById(matchId).select("halfTime");
@@ -137,7 +137,7 @@ async function startMatch(matchId) {
 }
 
 async function endMatch(matchId) {
-  const match = await Match.findById(matchId);
+  const match = await Match.findById(matchId).populate("teamA teamB");
   if (!match) throw new Error("Match not found");
 
   if (match.status !== "Ongoing") {
@@ -146,6 +146,7 @@ async function endMatch(matchId) {
 
   match.status = "Completed";
   await match.save();
+  await syncMatchToFirebase(match);
   return match;
 }
 async function deleteMatch(matchId) {
