@@ -6,20 +6,6 @@ const {
   clearMatchFromFirebase,
 } = require("../utils/firebaseUtils");
 
-async function setMatchCompleted(matchId) {
-  const updatedMatch = await Match.findByIdAndUpdate(
-    matchId,
-    { status: "Completed" },
-    { new: true }
-  ).populate("teamA teamB");
-
-  if (!updatedMatch) return null;
-
-  // await clearMatchFromFirebase(matchId);
-
-  return updatedMatch;
-}
-
 async function setHalfTimeStatus(matchId) {
   const updatedMatch = await Match.findByIdAndUpdate(
     matchId,
@@ -30,30 +16,6 @@ async function setHalfTimeStatus(matchId) {
   if (!updatedMatch) return null;
 
   await syncMatchToFirebase(updatedMatch);
-  return updatedMatch;
-}
-
-async function getHalfTimeStatus(matchId) {
-  const match = await Match.findById(matchId).select("halfTime");
-  if (!match) return null;
-  return match.halfTime;
-}
-
-async function updateTeamMat(matchId, teamAMat, teamBMat) {
-  const updateData = {};
-  if (teamAMat !== undefined) updateData.teamAMat = teamAMat;
-  if (teamBMat !== undefined) updateData.teamBMat = teamBMat;
-
-  const updatedMatch = await Match.findByIdAndUpdate(matchId, updateData, {
-    new: true,
-  });
-
-  if (!updatedMatch) {
-    const error = new Error("Match not found");
-    error.statusCode = 404;
-    throw error;
-  }
-
   return updatedMatch;
 }
 
@@ -115,7 +77,8 @@ async function updateMatch(matchId, updateData) {
     .populate("teamB", "name logo");
 
   if (existingMatch.status === "Ongoing" && updateData.status === "Completed") {
-    await clearMatchFromFirebase(matchId);
+    await clearMatchFromFirebase();
+    await syncMatchToFirebase(updatedMatch);
   } else {
     await syncMatchToFirebase(updatedMatch);
   }
@@ -137,7 +100,9 @@ async function startMatch(matchId) {
 }
 
 async function endMatch(matchId) {
-  const match = await Match.findById(matchId).populate("teamA teamB");
+  const match = await Match.findById(matchId)
+    .populate("teamA teamB")
+    .select("-playerStats");
   if (!match) throw new Error("Match not found");
 
   if (match.status !== "Ongoing") {
@@ -146,7 +111,9 @@ async function endMatch(matchId) {
 
   match.status = "Completed";
   await match.save();
+  await clearMatchFromFirebase();
   await syncMatchToFirebase(match);
+  console.log(match);
   return match;
 }
 async function deleteMatch(matchId) {
@@ -159,10 +126,7 @@ async function deleteMatch(matchId) {
 }
 
 module.exports = {
-  setMatchCompleted,
   setHalfTimeStatus,
-  getHalfTimeStatus,
-  updateTeamMat,
   createMatch,
   updateMatch,
   startMatch,

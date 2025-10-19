@@ -25,6 +25,7 @@ async function syncMatchToFirebase(
     matchNumber: match.matchNumber ?? null,
     matchType: match.matchType ?? null,
     matchId: match._id?.toString() ?? null,
+    date: match.date ?? null,
   };
 
   const lastAction = {
@@ -41,9 +42,11 @@ async function syncMatchToFirebase(
   await db.ref(`matches/${match._id}`).update({ stats, lastAction });
 }
 
-async function clearMatchFromFirebase(matchId) {
-  await db.ref(`matches/${matchId}`).remove();
+async function clearMatchFromFirebase(matchId = null) {
+  const ref = matchId ? db.ref(`matches/${matchId}`) : db.ref("matches");
+  await ref.remove();
 }
+
 module.exports = {
   syncMatchToFirebase,
   clearMatchFromFirebase,
