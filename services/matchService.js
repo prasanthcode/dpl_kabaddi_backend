@@ -113,7 +113,6 @@ async function endMatch(matchId) {
   await match.save();
   await clearMatchFromFirebase();
   await syncMatchToFirebase(match);
-  console.log(match);
   return match;
 }
 async function deleteMatch(matchId) {
